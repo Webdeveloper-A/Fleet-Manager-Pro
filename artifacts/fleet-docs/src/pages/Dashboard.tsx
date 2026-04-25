@@ -21,24 +21,107 @@ import {
   CalendarClock,
   BellRing,
   Inbox,
+  Send,
+  MessageCircle,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
+import { useState } from "react";
+import { useAuth } from "@/lib/auth";
+import { useToast } from "@/hooks/use-toast";
+import { sendExpiryAlerts, sendTelegramTest } from "@/lib/telegram-alerts";
 
 export default function Dashboard() {
+  const token = useAuth((s) => s.token);
+  const { toast } = useToast();
+  const [sendingTelegram, setSendingTelegram] = useState(false);
+
   const { data: summary, isLoading } = useGetDashboardSummary({
     query: { queryKey: getGetDashboardSummaryQueryKey() },
   });
+
   const { data: notifData } = useListNotifications({
     query: { queryKey: getListNotificationsQueryKey() },
   });
 
+  async function handleTelegramTest() {
+    setSendingTelegram(true);
+
+    try {
+      await sendTelegramTest(token);
+
+      toast({
+        title: "Telegram test yuborildi",
+        description: "Botga test xabar muvaffaqiyatli yuborildi.",
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Telegram test xatoligi";
+
+      toast({
+        title: "Telegram xatolik",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setSendingTelegram(false);
+    }
+  }
+
+  async function handleExpiryAlerts() {
+    setSendingTelegram(true);
+
+    try {
+      const result = await sendExpiryAlerts(token);
+
+      toast({
+        title: "Telegram alert yuborildi",
+        description: `${result.documents ?? 0} ta hujjat bo‘yicha xabar yuborildi.`,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Telegram alert xatoligi";
+
+      toast({
+        title: "Telegram xatolik",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setSendingTelegram(false);
+    }
+  }
+
   return (
     <div>
-      <PageHeader
-        title="Operations overview"
-        description="A quick look at fleet health, expiring documents, and active alerts."
-      />
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <PageHeader
+          title="Operations overview"
+          description="A quick look at fleet health, expiring documents, and active alerts."
+        />
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={handleTelegramTest}
+            disabled={sendingTelegram}
+            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            data-testid="button-telegram-test"
+          >
+            <MessageCircle className="h-4 w-4" />
+            Telegram Test
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExpiryAlerts}
+            disabled={sendingTelegram}
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            data-testid="button-send-expiry-alerts"
+          >
+            <Send className="h-4 w-4" />
+            Send Expiry Alerts
+          </button>
+        </div>
+      </div>
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
         {[
@@ -90,10 +173,10 @@ export default function Dashboard() {
                       kpi.tone === "emerald"
                         ? "rounded-md bg-emerald-500/10 p-1.5 text-emerald-600 dark:text-emerald-400"
                         : kpi.tone === "amber"
-                        ? "rounded-md bg-amber-500/10 p-1.5 text-amber-600 dark:text-amber-400"
-                        : kpi.tone === "rose"
-                        ? "rounded-md bg-rose-500/10 p-1.5 text-rose-600 dark:text-rose-400"
-                        : "rounded-md bg-primary/10 p-1.5 text-primary"
+                          ? "rounded-md bg-amber-500/10 p-1.5 text-amber-600 dark:text-amber-400"
+                          : kpi.tone === "rose"
+                            ? "rounded-md bg-rose-500/10 p-1.5 text-rose-600"
+                            : "rounded-md bg-primary/10 p-1.5 text-primary"
                     }
                   >
                     <kpi.Icon className="h-4 w-4" />
@@ -147,7 +230,9 @@ export default function Dashboard() {
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
             <div>
               <CardTitle className="text-base font-semibold">Recently expired</CardTitle>
-              <p className="text-xs text-muted-foreground">Documents already past their end date</p>
+              <p className="text-xs text-muted-foreground">
+                Documents already past their end date
+              </p>
             </div>
             <AlertTriangle className="h-4 w-4 text-rose-500" />
           </CardHeader>
@@ -252,8 +337,8 @@ function DocList({ docs }: { docs: Document[] }) {
                   d.status === "expired"
                     ? `Expired ${Math.abs(d.daysRemaining)}d ago`
                     : d.status === "expiring"
-                    ? `${d.daysRemaining}d left`
-                    : "Valid"
+                      ? `${d.daysRemaining}d left`
+                      : "Valid"
                 }
               />
               <span className="text-[10px] text-muted-foreground">
