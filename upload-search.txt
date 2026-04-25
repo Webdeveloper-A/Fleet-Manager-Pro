@@ -1,0 +1,27 @@
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\components\DocumentFormFields.tsx:29: fileUrl: string | null;
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\components\DocumentFormFields.tsx:30: fileName: string | null;
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\components\DocumentFormFields.tsx:40: fileUrl: null,
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\components\DocumentFormFields.tsx:41: fileName: null,
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\components\DocumentFormFields.tsx:111: fileUrl: uploaded.fileUrl,
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\components\DocumentFormFields.tsx:112: fileName: uploaded.fileName,
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\components\DocumentFormFields.tsx:215: {state.fileName ? (
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\components\DocumentFormFields.tsx:219: <span className="truncate" data-testid="text-attached-filename">
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\components\DocumentFormFields.tsx:220: {state.fileName}
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\components\DocumentFormFields.tsx:227: onClick={() => onChange({ ...state, fileUrl: null, fileName: null })}
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\pages\DocumentForm.tsx:49: fileUrl: state.fileUrl ?? undefined,
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\pages\DocumentForm.tsx:50: fileName: state.fileName ?? undefined,
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\pages\Documents.tsx:129: fileUrl: doc.fileUrl ?? null,
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\pages\Documents.tsx:130: fileName: doc.fileName ?? null,
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\pages\Documents.tsx:145: fileUrl: editState.fileUrl ?? undefined,
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\pages\Documents.tsx:146: fileName: editState.fileName ?? undefined,
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\pages\Documents.tsx:288: {d.fileUrl ? (
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\pages\Documents.tsx:334: {d.fileUrl ? (
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\pages\Documents.tsx:337: href={`/api/storage${d.fileUrl}`}
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\pages\VehicleDetail.tsx:160: fileUrl: doc.fileUrl ?? null,
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\pages\VehicleDetail.tsx:161: fileName: doc.fileName ?? null,
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\pages\VehicleDetail.tsx:177: fileUrl: docState.fileUrl ?? undefined,
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\pages\VehicleDetail.tsx:178: fileName: docState.fileName ?? undefined,
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\pages\VehicleDetail.tsx:190: fileUrl: docState.fileUrl ?? undefined,
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\pages\VehicleDetail.tsx:191: fileName: docState.fileName ?? undefined,
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\pages\VehicleDetail.tsx:348: {d.fileUrl ? (
+C:\Users\admin1\Desktop\Dasturlar2\Fleet-Manager-Pro\artifacts\fleet-docs\src\pages\VehicleDetail.tsx:350: href={`/api/storage${d.fileUrl}`}

@@ -13,10 +13,10 @@ import { Button } from "@/components/ui/button";
 import { Paperclip, Loader2, X, FileText } from "lucide-react";
 import {
   useListVehicles,
-  useRequestUploadUrl,
   getListVehiclesQueryKey,
   type Vehicle,
 } from "@workspace/api-client-react";
+import { useAuth } from "@/lib/auth";
 import { toast } from "@/hooks/use-toast";
 
 export type DocumentFormState = {
@@ -52,7 +52,7 @@ export function DocumentFormFields({
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const requestUpload = useRequestUploadUrl();
+const token = useAuth((s) => s.token);
 
   const vehiclesQuery = useListVehicles(
     { pageSize: 100 },
@@ -72,32 +72,55 @@ export function DocumentFormFields({
     onChange({ ...state, [key]: value });
   }
 
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    try {
-      const { uploadURL, objectPath } = await requestUpload.mutateAsync({
-        data: { name: file.name, size: file.size, contentType: file.type || "application/octet-stream" },
-      });
-      const putRes = await fetch(uploadURL, {
-        method: "PUT",
-        headers: { "Content-Type": file.type || "application/octet-stream" },
-        body: file,
-      });
-      if (!putRes.ok) {
-        throw new Error(`Upload failed (${putRes.status})`);
-      }
-      onChange({ ...state, fileUrl: objectPath, fileName: file.name });
-      toast({ title: "File attached", description: file.name });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Upload failed";
-      toast({ title: "Upload failed", description: message, variant: "destructive" });
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
+async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  if (!token) {
+    toast({
+      title: "Upload failed",
+      description: "Avval tizimga qayta kiring.",
+      variant: "destructive",
+    });
+    return;
   }
+
+  setUploading(true);
+
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch("/api/uploads/document", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(errorText || `Upload failed (${res.status})`);
+    }
+
+    const uploaded = await res.json();
+
+    onChange({
+      ...state,
+      fileUrl: uploaded.fileUrl,
+      fileName: uploaded.fileName,
+    });
+
+    toast({ title: "File attached", description: file.name });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Upload failed";
+    toast({ title: "Upload failed", description: message, variant: "destructive" });
+  } finally {
+    setUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+}
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">

@@ -15,3 +15,5 @@ start-backend.ps1
 *.tsbuildinfo
 .DS_Store
 Thumbs.db
+
+uploads/

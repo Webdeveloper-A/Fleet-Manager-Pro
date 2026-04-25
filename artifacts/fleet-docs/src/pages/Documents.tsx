@@ -65,6 +65,9 @@ import {
   type DocumentFormState,
 } from "@/components/DocumentFormFields";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
+import { downloadDocumentFile } from "@/lib/download-document-file";
+
 
 const PAGE_SIZE = 15;
 
@@ -87,6 +90,7 @@ export default function Documents() {
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<Document | null>(null);
   const [deleting, setDeleting] = useState<Document | null>(null);
+  const token = useAuth((s) => s.token);
 
   useEffect(() => {
     setPage(1);
@@ -333,13 +337,13 @@ export default function Documents() {
                             <DropdownMenuItem onClick={() => openEdit(d)}>Edit</DropdownMenuItem>
                             {d.fileUrl ? (
                               <DropdownMenuItem asChild>
-                                <a
-                                  href={`/api/storage${d.fileUrl}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  Open attachment
-                                </a>
+                               <button
+                                      type="button"
+                                      className="text-blue-600 hover:underline"
+                                      onClick={() => downloadDocumentFile(d.fileUrl!, d.fileName, token)}
+                                      >
+                                      {d.fileName || "Faylni yuklab olish"}
+                              </button>
                               </DropdownMenuItem>
                             ) : null}
                             <DropdownMenuItem

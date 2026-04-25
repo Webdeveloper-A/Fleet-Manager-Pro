@@ -65,8 +65,12 @@ import {
   emptyDocument,
   type DocumentFormState,
 } from "@/components/DocumentFormFields";
+import { useAuth } from "@/lib/auth";
+import { downloadDocumentFile } from "@/lib/download-document-file";
+
 
 export default function VehicleDetail() {
+  const token = useAuth((s) => s.token);
   const params = useParams<{ id: string }>();
   const id = params.id!;
   const [, setLocation] = useLocation();
@@ -91,6 +95,7 @@ export default function VehicleDetail() {
   );
   const [docState, setDocState] = useState<DocumentFormState | null>(null);
   const [deleteDoc_, setDeleteDoc_] = useState<Document | null>(null);
+ 
 
   useEffect(() => {
     if (data && !editState) {
@@ -345,14 +350,17 @@ export default function VehicleDetail() {
                     <TableCell>
                       <div className="flex items-center gap-2 font-medium">
                         {d.name}
-                        {d.fileUrl ? (
-                          <Link
-                            href={`/api/storage${d.fileUrl}`}
-                            className="text-muted-foreground hover:text-primary"
-                          >
-                            <Paperclip className="h-3 w-3" />
-                          </Link>
-                        ) : null}
+                       {d.fileUrl ? (
+                       <button
+                        type="button"
+                        className="text-blue-600 hover:underline"
+                         onClick={() => downloadDocumentFile(d.fileUrl!, d.fileName, token)}
+                             >
+                           {d.fileName || "Faylni yuklab olish"}
+                       </button>
+                             ) : (
+                            <span className="text-muted-foreground">Fayl yo‘q</span>
+                           )}
                       </div>
                     </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">

@@ -7,9 +7,11 @@ import documentsRouter from "./documents";
 import dashboardRouter from "./dashboard";
 import notificationsRouter from "./notifications";
 import storageRouter from "./storage";
+import { uploadsRouter } from "./upload-routes";
 
 const router: IRouter = Router();
 
+router.use(uploadsRouter);
 router.use(healthRouter);
 router.use(authRouter);
 router.use(companiesRouter);
