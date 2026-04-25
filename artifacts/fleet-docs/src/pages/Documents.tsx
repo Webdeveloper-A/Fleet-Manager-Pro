@@ -67,7 +67,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { downloadDocumentFile } from "@/lib/download-document-file";
-
+import { downloadReport } from "@/lib/download-report";
 
 const PAGE_SIZE = 15;
 
@@ -258,10 +258,40 @@ export default function Documents() {
               <Plus className="mr-1 h-4 w-4" />
               Add document
             </Button>
+
+
+
           }
         />
       ) : (
         <>
+        <button
+  type="button"
+  className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted"
+  onClick={() =>
+    downloadReport(
+      "/api/reports/expiring-documents.xlsx",
+      "muddati-yaqin-hujjatlar.xlsx",
+      token,
+    )
+  }
+>
+  Expiring Excel
+</button>
+
+<button
+  type="button"
+  className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted"
+  onClick={() =>
+    downloadReport(
+      "/api/reports/expired-documents.xlsx",
+      "muddati-otgan-hujjatlar.xlsx",
+      token,
+    )
+  }
+>
+  Expired Excel
+</button>
           <Card className="hidden md:block">
             <CardContent className="p-0">
               <Table>

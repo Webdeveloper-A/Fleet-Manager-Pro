@@ -8,6 +8,7 @@ import dashboardRouter from "./dashboard";
 import notificationsRouter from "./notifications";
 import storageRouter from "./storage";
 import { uploadsRouter } from "./upload-routes";
+import reportsRouter from "./reports";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(documentsRouter);
 router.use(dashboardRouter);
 router.use(notificationsRouter);
 router.use(storageRouter);
+router.use(reportsRouter);
 
 export default router;
