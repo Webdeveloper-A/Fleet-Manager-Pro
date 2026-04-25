@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Fleet Docs"
+version = "1.0.0"
+id = "artifacts/fleet-docs"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 26060
+
+[services.development]
+run = "pnpm --filter @workspace/fleet-docs run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/fleet-docs", "run", "build" ]
+publicDir = "artifacts/fleet-docs/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "26060"
+BASE_PATH = "/"

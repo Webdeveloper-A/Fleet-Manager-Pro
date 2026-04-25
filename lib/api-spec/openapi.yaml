@@ -1,0 +1,681 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Fleet & document management API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication
+  - name: companies
+    description: Admin company management
+  - name: vehicles
+    description: Vehicle management
+  - name: documents
+    description: Document management
+  - name: dashboard
+    description: Dashboard summaries
+  - name: storage
+    description: Object storage uploads
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResult"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get the currently authenticated principal
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Principal info
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MeResponse" }
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /companies:
+    get:
+      operationId: listCompanies
+      tags: [companies]
+      summary: List all companies (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Paginated list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompanyListResponse" }
+    post:
+      operationId: createCompany
+      tags: [companies]
+      summary: Create a new company with login credentials (admin only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCompanyRequest" }
+      responses:
+        "201":
+          description: Company created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Company" }
+
+  /companies/{id}:
+    delete:
+      operationId: deleteCompany
+      tags: [companies]
+      summary: Delete a company (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Deleted
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Status counts and recent expirations for the current company
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardSummary" }
+
+  /vehicles:
+    get:
+      operationId: listVehicles
+      tags: [vehicles]
+      summary: List vehicles for the current company
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Paginated list with status badges
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VehicleListResponse" }
+    post:
+      operationId: createVehicle
+      tags: [vehicles]
+      summary: Create a vehicle
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateVehicleRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Vehicle" }
+
+  /vehicles/{id}:
+    get:
+      operationId: getVehicle
+      tags: [vehicles]
+      summary: Get a vehicle with its documents
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Vehicle detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VehicleDetail" }
+    patch:
+      operationId: updateVehicle
+      tags: [vehicles]
+      summary: Update a vehicle
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateVehicleRequest" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Vehicle" }
+    delete:
+      operationId: deleteVehicle
+      tags: [vehicles]
+      summary: Delete a vehicle
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Deleted
+
+  /documents:
+    get:
+      operationId: listDocuments
+      tags: [documents]
+      summary: List documents for the current company
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [valid, expiring, expired]
+        - in: query
+          name: vehicleId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Paginated list of documents
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DocumentListResponse" }
+    post:
+      operationId: createDocument
+      tags: [documents]
+      summary: Create a document attached to a vehicle
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateDocumentRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+
+  /documents/{id}:
+    get:
+      operationId: getDocument
+      tags: [documents]
+      summary: Get a document
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Document
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+    patch:
+      operationId: updateDocument
+      tags: [documents]
+      summary: Update a document
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateDocumentRequest" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+    delete:
+      operationId: deleteDocument
+      tags: [documents]
+      summary: Delete a document
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Deleted
+
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [documents]
+      summary: List recent expiry notifications for the current company
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Notifications
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationListResponse" }
+
+  /storage/uploads/request-url:
+    post:
+      operationId: requestUploadUrl
+      tags: [storage]
+      summary: Request a presigned upload URL
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RequestUploadUrlRequest" }
+      responses:
+        "200":
+          description: Presigned upload URL
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadUrlResult" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string }
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 1 }
+
+    LoginResult:
+      type: object
+      required: [token, principal]
+      properties:
+        token: { type: string }
+        principal: { $ref: "#/components/schemas/Principal" }
+
+    Principal:
+      type: object
+      required: [id, email, role]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        role:
+          type: string
+          enum: [admin, company]
+        companyId:
+          type: [string, "null"]
+          format: uuid
+        companyName:
+          type: [string, "null"]
+
+    MeResponse:
+      type: object
+      required: [principal]
+      properties:
+        principal: { $ref: "#/components/schemas/Principal" }
+
+    Company:
+      type: object
+      required: [id, name, email, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        contactName:
+          type: [string, "null"]
+        phone:
+          type: [string, "null"]
+        createdAt: { type: string, format: date-time }
+        vehicleCount:
+          type: integer
+
+    CreateCompanyRequest:
+      type: object
+      required: [name, email, password]
+      properties:
+        name: { type: string, minLength: 1 }
+        email: { type: string, format: email }
+        password: { type: string, minLength: 6 }
+        contactName: { type: string }
+        phone: { type: string }
+
+    CompanyListResponse:
+      type: object
+      required: [items, total, page, pageSize]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Company" }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+
+    Vehicle:
+      type: object
+      required:
+        - id
+        - companyId
+        - name
+        - plateNumber
+        - vinCode
+        - year
+        - createdAt
+      properties:
+        id: { type: string, format: uuid }
+        companyId: { type: string, format: uuid }
+        name: { type: string }
+        plateNumber: { type: string }
+        vinCode: { type: string }
+        year: { type: integer }
+        techPassportSeries:
+          type: [string, "null"]
+        driverName:
+          type: [string, "null"]
+        createdAt: { type: string, format: date-time }
+        documentCount:
+          type: integer
+        worstStatus:
+          type: string
+          enum: [valid, expiring, expired, none]
+        nextExpiryAt:
+          type: [string, "null"]
+          format: date-time
+
+    VehicleDetail:
+      allOf:
+        - $ref: "#/components/schemas/Vehicle"
+        - type: object
+          required: [documents]
+          properties:
+            documents:
+              type: array
+              items: { $ref: "#/components/schemas/Document" }
+
+    CreateVehicleRequest:
+      type: object
+      required: [name, plateNumber, vinCode, year]
+      properties:
+        name: { type: string, minLength: 1 }
+        plateNumber: { type: string, minLength: 1 }
+        vinCode: { type: string, minLength: 1 }
+        year: { type: integer, minimum: 1900, maximum: 2100 }
+        techPassportSeries: { type: string }
+        driverName: { type: string }
+
+    UpdateVehicleRequest:
+      type: object
+      properties:
+        name: { type: string }
+        plateNumber: { type: string }
+        vinCode: { type: string }
+        year: { type: integer }
+        techPassportSeries: { type: string }
+        driverName: { type: string }
+
+    VehicleListResponse:
+      type: object
+      required: [items, total, page, pageSize]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Vehicle" }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+
+    Document:
+      type: object
+      required:
+        - id
+        - vehicleId
+        - companyId
+        - name
+        - number
+        - startDate
+        - endDate
+        - status
+        - daysRemaining
+        - createdAt
+      properties:
+        id: { type: string, format: uuid }
+        vehicleId: { type: string, format: uuid }
+        companyId: { type: string, format: uuid }
+        vehicleName:
+          type: [string, "null"]
+        vehiclePlateNumber:
+          type: [string, "null"]
+        name: { type: string }
+        number: { type: string }
+        startDate: { type: string, format: date-time }
+        endDate: { type: string, format: date-time }
+        note:
+          type: [string, "null"]
+        fileUrl:
+          type: [string, "null"]
+        fileName:
+          type: [string, "null"]
+        status:
+          type: string
+          enum: [valid, expiring, expired]
+        daysRemaining: { type: integer }
+        createdAt: { type: string, format: date-time }
+
+    CreateDocumentRequest:
+      type: object
+      required: [vehicleId, name, number, startDate, endDate]
+      properties:
+        vehicleId: { type: string, format: uuid }
+        name: { type: string, minLength: 1 }
+        number: { type: string, minLength: 1 }
+        startDate: { type: string, format: date-time }
+        endDate: { type: string, format: date-time }
+        note: { type: string }
+        fileUrl: { type: string }
+        fileName: { type: string }
+
+    UpdateDocumentRequest:
+      type: object
+      properties:
+        name: { type: string }
+        number: { type: string }
+        startDate: { type: string, format: date-time }
+        endDate: { type: string, format: date-time }
+        note: { type: string }
+        fileUrl: { type: string }
+        fileName: { type: string }
+
+    DocumentListResponse:
+      type: object
+      required: [items, total, page, pageSize]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Document" }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+
+    DashboardSummary:
+      type: object
+      required:
+        - totalVehicles
+        - totalDocuments
+        - validCount
+        - expiringCount
+        - expiredCount
+        - upcomingExpirations
+        - recentlyExpired
+      properties:
+        totalVehicles: { type: integer }
+        totalDocuments: { type: integer }
+        validCount: { type: integer }
+        expiringCount: { type: integer }
+        expiredCount: { type: integer }
+        upcomingExpirations:
+          type: array
+          items: { $ref: "#/components/schemas/Document" }
+        recentlyExpired:
+          type: array
+          items: { $ref: "#/components/schemas/Document" }
+
+    Notification:
+      type: object
+      required: [id, documentId, kind, message, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        documentId: { type: string, format: uuid }
+        kind:
+          type: string
+          enum: [expiring_soon, expired]
+        message: { type: string }
+        createdAt: { type: string, format: date-time }
+        documentName:
+          type: [string, "null"]
+        vehicleName:
+          type: [string, "null"]
+
+    NotificationListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Notification" }
+
+    RequestUploadUrlRequest:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name: { type: string }
+        size: { type: integer }
+        contentType: { type: string }
+
+    UploadUrlResult:
+      type: object
+      required: [uploadURL, objectPath]
+      properties:
+        uploadURL: { type: string }
+        objectPath: { type: string }
