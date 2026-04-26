@@ -1,34 +1,30 @@
-import express, { type Express } from "express";
-import cors from "cors";
-import pinoHttp from "pino-http";
-import router from "./routes";
-import { logger } from "./lib/logger";
+import express, { type Request, type Response } from "express";
+import { createRequire } from "node:module";
+import routes from "./routes";
 
-const app: Express = express();
+type LogLevel = "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent";
+
+type PinoHttpFactory = (options?: {
+  customLogLevel?: (req: Request, res: Response, err?: Error) => LogLevel;
+}) => express.RequestHandler;
+
+const require = createRequire(import.meta.url);
+const pinoHttp = require("pino-http") as PinoHttpFactory;
+
+const app = express();
 
 app.use(
   pinoHttp({
-    logger,
-    serializers: {
-      req(req) {
-        return {
-          id: req.id,
-          method: req.method,
-          url: req.url?.split("?")[0],
-        };
-      },
-      res(res) {
-        return {
-          statusCode: res.statusCode,
-        };
-      },
+    customLogLevel: (_req: Request, res: Response, err?: Error) => {
+      if (err || res.statusCode >= 500) return "error";
+      if (res.statusCode >= 400) return "warn";
+      return "info";
     },
   }),
 );
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-app.use("/api", router);
+app.use(express.json({ limit: "10mb" }));
+
+app.use("/api", routes);
 
 export default app;
