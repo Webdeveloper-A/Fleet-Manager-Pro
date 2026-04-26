@@ -27,6 +27,16 @@ export const TELEGRAM_CHAT_ID = optionalEnv("TELEGRAM_CHAT_ID");
 
 export const ENABLE_DEMO_SEED = optionalEnv("ENABLE_DEMO_SEED") === "true";
 
+export const STORAGE_DRIVER = optionalEnv("STORAGE_DRIVER") ?? "local";
+
+export const R2_ACCOUNT_ID = optionalEnv("R2_ACCOUNT_ID");
+
+export const R2_ACCESS_KEY_ID = optionalEnv("R2_ACCESS_KEY_ID");
+
+export const R2_SECRET_ACCESS_KEY = optionalEnv("R2_SECRET_ACCESS_KEY");
+
+export const R2_BUCKET_NAME = optionalEnv("R2_BUCKET_NAME");
+
 export function validateBackendEnv(): void {
   if (JWT_SECRET.length < 32) {
     throw new Error("JWT_SECRET must be at least 32 characters long.");
@@ -38,5 +48,24 @@ export function validateBackendEnv(): void {
 
   if ((TELEGRAM_BOT_TOKEN && !TELEGRAM_CHAT_ID) || (!TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID)) {
     throw new Error("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be configured together.");
+  }
+
+  if (!["local", "r2"].includes(STORAGE_DRIVER)) {
+    throw new Error("STORAGE_DRIVER must be either 'local' or 'r2'.");
+  }
+
+  if (STORAGE_DRIVER === "r2") {
+    const missing = [
+      ["R2_ACCOUNT_ID", R2_ACCOUNT_ID],
+      ["R2_ACCESS_KEY_ID", R2_ACCESS_KEY_ID],
+      ["R2_SECRET_ACCESS_KEY", R2_SECRET_ACCESS_KEY],
+      ["R2_BUCKET_NAME", R2_BUCKET_NAME],
+    ].filter(([, value]) => !value);
+
+    if (missing.length > 0) {
+      throw new Error(
+        `Missing R2 environment variables: ${missing.map(([name]) => name).join(", ")}`,
+      );
+    }
   }
 }
