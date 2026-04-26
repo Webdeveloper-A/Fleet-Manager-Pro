@@ -2,7 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { scheduleExpiryJob } from "./lib/expiryJob";
 import { seedAdminIfMissing } from "./lib/seed";
-import { registerUploadRoutes } from "./uploads/upload-routes";
+
 import { validateBackendEnv } from "./lib/env";
 
 validateBackendEnv();
@@ -21,7 +21,7 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-registerUploadRoutes(app);
+
 
 app.listen(port, async (err) => {
   if (err) {
