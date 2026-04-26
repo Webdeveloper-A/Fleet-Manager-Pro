@@ -3,6 +3,9 @@ import { logger } from "./lib/logger";
 import { scheduleExpiryJob } from "./lib/expiryJob";
 import { seedAdminIfMissing } from "./lib/seed";
 import { registerUploadRoutes } from "./uploads/upload-routes";
+import { validateBackendEnv } from "./lib/env";
+
+validateBackendEnv();
 
 const rawPort = process.env["PORT"];
 

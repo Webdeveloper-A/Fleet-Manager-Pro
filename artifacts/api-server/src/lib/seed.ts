@@ -9,12 +9,21 @@ import { eq } from "drizzle-orm";
 import { hashPassword } from "./auth";
 import { logger } from "./logger";
 
-const ADMIN_EMAIL = "admin@fleetdocs.app";
-const ADMIN_PASSWORD = "admin1234";
-const DEMO_EMAIL = "demo@fleetdocs.app";
-const DEMO_PASSWORD = "demo1234";
+const ADMIN_EMAIL = process.env["SEED_ADMIN_EMAIL"] ?? "admin@fleetdocs.app";
+const ADMIN_PASSWORD = process.env["SEED_ADMIN_PASSWORD"] ?? "admin1234";
+const DEMO_EMAIL = process.env["SEED_DEMO_EMAIL"] ?? "demo@fleetdocs.app";
+const DEMO_PASSWORD = process.env["SEED_DEMO_PASSWORD"] ?? "demo1234";
+
+function isSeedEnabled() {
+  return process.env["ENABLE_DEMO_SEED"] === "true";
+}
 
 export async function seedAdminIfMissing(): Promise<void> {
+  if (!isSeedEnabled()) {
+    logger.info("[seed] skipped. Set ENABLE_DEMO_SEED=true to enable local demo seed.");
+    return;
+  }
+
   const [existingAdmin] = await db
     .select({ id: usersTable.id })
     .from(usersTable)
@@ -23,12 +32,14 @@ export async function seedAdminIfMissing(): Promise<void> {
 
   if (!existingAdmin) {
     const adminHash = await hashPassword(ADMIN_PASSWORD);
+
     await db.insert(usersTable).values({
       email: ADMIN_EMAIL,
       passwordHash: adminHash,
       role: "admin",
       companyId: null,
     });
+
     logger.info({ email: ADMIN_EMAIL }, "[seed] created default admin");
   }
 
@@ -38,7 +49,10 @@ export async function seedAdminIfMissing(): Promise<void> {
     .where(eq(usersTable.email, DEMO_EMAIL))
     .limit(1);
 
-  if (existingDemo) return;
+  if (existingDemo) {
+    logger.info({ email: DEMO_EMAIL }, "[seed] demo user already exists");
+    return;
+  }
 
   const [demoCompany] = await db
     .insert(companiesTable)
@@ -50,6 +64,7 @@ export async function seedAdminIfMissing(): Promise<void> {
     .returning();
 
   const demoHash = await hashPassword(DEMO_PASSWORD);
+
   await db.insert(usersTable).values({
     email: DEMO_EMAIL,
     passwordHash: demoHash,
