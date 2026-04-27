@@ -1,35 +1,86 @@
 import { Link, useLocation } from "wouter";
-import { Home, Truck, FileText, Building2, ShieldCheck, Bot, LifeBuoy, Send } from "lucide-react";
+import {
+  Home,
+  Truck,
+  FileText,
+  Building2,
+  ShieldCheck,
+  Bot,
+  LifeBuoy,
+  Send,
+  ScrollText,
+  ClipboardCheck,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { useT, type TranslationKey } from "@/lib/i18n";
 
 type Role = "company" | "admin";
 
-const NAV = [
-  { href: "/", labelKey: "dashboard", icon: Home, roles: ["company"] as const },
-  { href: "/vehicles", labelKey: "vehicles", icon: Truck, roles: ["company"] as const },
-  { href: "/documents", labelKey: "documents", icon: FileText, roles: ["company"] as const },
-  { href: "/telegram", labelKey: "telegram", icon: Send, roles: ["company"] as const },
-  { href: "/call-bot", labelKey: "callBot", icon: Bot, roles: ["company"] as const },
+type NavItem = {
+  href: string;
+  labelKey: TranslationKey;
+  icon: LucideIcon;
+  roles: Role[];
+};
+
+const NAV: NavItem[] = [
+  {
+    href: "/",
+    labelKey: "dashboard",
+    icon: Home,
+    roles: ["company"],
+  },
+  {
+    href: "/vehicles",
+    labelKey: "vehicles",
+    icon: Truck,
+    roles: ["company"],
+  },
+  {
+    href: "/tir-carnets",
+    labelKey: "tirCarnets",
+    icon: ClipboardCheck,
+    roles: ["company"],
+  },
+  {
+    href: "/dazvols",
+    labelKey: "dazvols",
+    icon: ScrollText,
+    roles: ["company"],
+  },
+  {
+    href: "/documents",
+    labelKey: "documents",
+    icon: FileText,
+    roles: ["company"],
+  },
+  {
+    href: "/telegram",
+    labelKey: "telegram",
+    icon: Send,
+    roles: ["company"],
+  },
+  {
+    href: "/call-bot",
+    labelKey: "callBot",
+    icon: Bot,
+    roles: ["company"],
+  },
   {
     href: "/admin/support",
     labelKey: "support",
     icon: LifeBuoy,
-    roles: ["admin"] as const,
+    roles: ["admin"],
   },
   {
     href: "/admin/companies",
     labelKey: "companies",
     icon: Building2,
-    roles: ["admin"] as const,
+    roles: ["admin"],
   },
-] satisfies Array<{
-  href: string;
-  labelKey: TranslationKey;
-  icon: typeof Home;
-  roles: readonly Role[];
-}>;
+];
 
 export function Sidebar() {
   const [location] = useLocation();
@@ -37,7 +88,7 @@ export function Sidebar() {
   const t = useT();
 
   const role: Role = principal?.role === "admin" ? "admin" : "company";
-  const items = NAV.filter((n) => n.roles.includes(role));
+  const items = NAV.filter((item) => item.roles.includes(role));
 
   return (
     <aside
@@ -50,7 +101,9 @@ export function Sidebar() {
         </div>
 
         <div>
-          <p className="text-sm font-semibold tracking-tight text-foreground">{t("appName")}</p>
+          <p className="text-sm font-semibold tracking-tight text-foreground">
+            {t("appName")}
+          </p>
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
             {t("appSubtitle")}
           </p>
@@ -63,7 +116,7 @@ export function Sidebar() {
           const active =
             item.href === "/"
               ? location === "/"
-              : location === item.href || location.startsWith(item.href + "/");
+              : location === item.href || location.startsWith(`${item.href}/`);
 
           return (
             <Link
@@ -80,7 +133,9 @@ export function Sidebar() {
               <Icon
                 className={cn(
                   "h-4 w-4 shrink-0",
-                  active ? "text-primary" : "text-muted-foreground group-hover:text-foreground",
+                  active
+                    ? "text-primary"
+                    : "text-muted-foreground group-hover:text-foreground",
                 )}
               />
               {t(item.labelKey)}

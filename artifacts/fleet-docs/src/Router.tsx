@@ -1,22 +1,22 @@
-import { useEffect, ReactNode } from "react";
-import { useLocation, Route, Switch } from "wouter";
-import { useAuth } from "@/lib/auth";
-import { useGetMe, getGetMeQueryKey } from "@workspace/api-client-react";
+import type { ReactNode } from "react";
+import { Route, Switch } from "wouter";
 import AppShell from "@/components/layout/AppShell";
+import { useAuth } from "@/lib/auth";
+
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Vehicles from "@/pages/Vehicles";
-import VehicleDetail from "@/pages/VehicleDetail";
 import VehicleForm from "@/pages/VehicleForm";
+import VehicleDetail from "@/pages/VehicleDetail";
 import Documents from "@/pages/Documents";
 import DocumentForm from "@/pages/DocumentForm";
-import AdminCompanies from "@/pages/AdminCompanies";
 import CallBot from "@/pages/CallBot";
-import Profile from "@/pages/Profile";
-import NotFound from "@/pages/not-found";
-import { Loader2 } from "lucide-react";
 import AdminSupport from "@/pages/AdminSupport";
+import AdminCompanies from "@/pages/AdminCompanies";
 import TelegramSettings from "@/pages/TelegramSettings";
+import TIRCarnets from "@/pages/TIRCarnets";
+import Dazvols from "@/pages/Dazvols";
+import NotFound from "@/pages/not-found";
 
 function ProtectedShell({
   children,
@@ -25,79 +25,40 @@ function ProtectedShell({
   children: ReactNode;
   adminOnly?: boolean;
 }) {
-  const [location, setLocation] = useLocation();
-  const { token, principal, setAuth, logout } = useAuth();
+  const { principal } = useAuth();
 
-  const { data: me, isLoading, error } = useGetMe({
-    query: {
-      enabled: !!token,
-      queryKey: getGetMeQueryKey(),
-      retry: false,
-    },
-  });
-
-  useEffect(() => {
-    if (!token) {
-      setLocation("/login");
-    }
-  }, [token, setLocation]);
-
-  useEffect(() => {
-    if (error) {
-      logout();
-      setLocation("/login");
-    } else if (me && token) {
-      setAuth(token, me.principal);
-    }
-  }, [me, error, token, setAuth, logout, setLocation]);
-
-  useEffect(() => {
-    if (principal?.role === "admin" && location === "/") {
-      setLocation("/admin/companies");
-    }
-  }, [principal, location, setLocation]);
-
-  if (!token || isLoading || !principal) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+  if (!principal) {
+    return <Login />;
   }
 
   if (adminOnly && principal.role !== "admin") {
-    return <RedirectTo to="/" />;
+    return (
+      <AppShell>
+        <div className="rounded-xl border border-border bg-card p-6">
+          <h1 className="text-lg font-semibold">Ruxsat yo‘q</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Ushbu bo‘lim faqat administrator uchun mo‘ljallangan.
+          </p>
+        </div>
+      </AppShell>
+    );
   }
 
   return <AppShell>{children}</AppShell>;
 }
 
-function RedirectTo({ to }: { to: string }) {
-  const [, setLocation] = useLocation();
-
-  useEffect(() => {
-    setLocation(to);
-  }, [to, setLocation]);
-
-  return null;
-}
-
 export default function Router() {
   return (
     <Switch>
-      <Route path="/login" component={Login} />
+      <Route path="/login">
+        <Login />
+      </Route>
 
       <Route path="/">
         <ProtectedShell>
           <Dashboard />
         </ProtectedShell>
       </Route>
-
-<Route path="/telegram">
-  <ProtectedShell>
-    <TelegramSettings />
-  </ProtectedShell>
-</Route>
 
       <Route path="/vehicles">
         <ProtectedShell>
@@ -111,9 +72,27 @@ export default function Router() {
         </ProtectedShell>
       </Route>
 
+      <Route path="/vehicles/:id/edit">
+        <ProtectedShell>
+          <VehicleForm />
+        </ProtectedShell>
+      </Route>
+
       <Route path="/vehicles/:id">
         <ProtectedShell>
           <VehicleDetail />
+        </ProtectedShell>
+      </Route>
+
+      <Route path="/tir-carnets">
+        <ProtectedShell>
+          <TIRCarnets />
+        </ProtectedShell>
+      </Route>
+
+      <Route path="/dazvols">
+        <ProtectedShell>
+          <Dazvols />
         </ProtectedShell>
       </Route>
 
@@ -129,23 +108,29 @@ export default function Router() {
         </ProtectedShell>
       </Route>
 
+      <Route path="/documents/:id/edit">
+        <ProtectedShell>
+          <DocumentForm />
+        </ProtectedShell>
+      </Route>
+
+      <Route path="/telegram">
+        <ProtectedShell>
+          <TelegramSettings />
+        </ProtectedShell>
+      </Route>
+
       <Route path="/call-bot">
         <ProtectedShell>
           <CallBot />
         </ProtectedShell>
       </Route>
 
-      <Route path="/profile">
-        <ProtectedShell>
-          <Profile />
+      <Route path="/admin/support">
+        <ProtectedShell adminOnly>
+          <AdminSupport />
         </ProtectedShell>
       </Route>
-
-<Route path="/admin/support">
-  <ProtectedShell adminOnly>
-    <AdminSupport />
-  </ProtectedShell>
-</Route>
 
       <Route path="/admin/companies">
         <ProtectedShell adminOnly>
@@ -153,7 +138,11 @@ export default function Router() {
         </ProtectedShell>
       </Route>
 
-      <Route component={NotFound} />
+      <Route>
+        <ProtectedShell>
+          <NotFound />
+        </ProtectedShell>
+      </Route>
     </Switch>
   );
 }
