@@ -1,9 +1,10 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListDocuments,
   useListVehicles,
+  useCreateDocument,
   useUpdateDocument,
   useDeleteDocument,
   getListDocumentsQueryKey,
@@ -57,7 +58,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Search, FileText, MoreHorizontal, Loader2, Paperclip } from "lucide-react";
+import {
+  Plus,
+  Search,
+  FileText,
+  MoreHorizontal,
+  Loader2,
+  Paperclip,
+  Download,
+  Upload,
+  FileSpreadsheet,
+} from "lucide-react";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
 import {
@@ -71,18 +82,161 @@ import { downloadReport } from "@/lib/download-report";
 
 const PAGE_SIZE = 15;
 
+type CsvRow = Record<string, string>;
+
 function useDebounced<T>(value: T, delay = 300): T {
   const [v, setV] = useState(value);
+
   useEffect(() => {
     const t = setTimeout(() => setV(value), delay);
     return () => clearTimeout(t);
   }, [value, delay]);
+
   return v;
+}
+
+function csvEscape(value: unknown) {
+  const text = String(value ?? "");
+  const escaped = text.replace(/"/g, '""');
+  return `"${escaped}"`;
+}
+
+function downloadCsv(filename: string, rows: Array<Record<string, unknown>>) {
+  if (rows.length === 0) {
+    toast({
+      title: "Eksport uchun ma’lumot yo‘q",
+      description: "Avval hujjat qo‘shing yoki filtrlarni tozalang.",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  const headers = Object.keys(rows[0]);
+  const csv = [
+    headers.map(csvEscape).join(","),
+    ...rows.map((row) => headers.map((header) => csvEscape(row[header])).join(",")),
+  ].join("\n");
+
+  const blob = new Blob(["\uFEFF" + csv], {
+    type: "text/csv;charset=utf-8;",
+  });
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  URL.revokeObjectURL(url);
+}
+
+function parseCsv(text: string): CsvRow[] {
+  const rows: string[][] = [];
+  let current = "";
+  let row: string[] = [];
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const next = text[i + 1];
+
+    if (char === '"' && inQuotes && next === '"') {
+      current += '"';
+      i++;
+      continue;
+    }
+
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+
+    if (char === "," && !inQuotes) {
+      row.push(current);
+      current = "";
+      continue;
+    }
+
+    if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && next === "\n") i++;
+
+      row.push(current);
+      current = "";
+
+      if (row.some((cell) => cell.trim())) {
+        rows.push(row);
+      }
+
+      row = [];
+      continue;
+    }
+
+    current += char;
+  }
+
+  row.push(current);
+
+  if (row.some((cell) => cell.trim())) {
+    rows.push(row);
+  }
+
+  if (rows.length < 2) return [];
+
+  const headers = rows[0].map((header) => header.trim());
+
+  return rows.slice(1).map((cells) => {
+    const item: CsvRow = {};
+
+    headers.forEach((header, index) => {
+      item[header] = (cells[index] ?? "").trim();
+    });
+
+    return item;
+  });
+}
+
+function normalizePlate(value: string) {
+  return value.replace(/\s+/g, "").toUpperCase();
+}
+
+function toIsoDate(value: string, fieldName: string) {
+  if (!value.trim()) {
+    throw new Error(`${fieldName} kiritilmagan`);
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`${fieldName} noto‘g‘ri formatda`);
+  }
+
+  return date.toISOString();
+}
+
+function buildTemplateRows() {
+  return [
+    {
+      vehiclePlate: "01A123BC",
+      vehicleName: "Volvo FH",
+      name: "Sug‘urta polisi",
+      number: "INS-2026-001",
+      startDate: "2026-01-01",
+      endDate: "2026-12-31",
+      note: "Namuna qator. Importdan oldin o‘chirib yuboring.",
+      fileName: "",
+      fileUrl: "",
+    },
+  ];
 }
 
 export default function Documents() {
   const [, setLocation] = useLocation();
   const qc = useQueryClient();
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+
   const [searchInput, setSearchInput] = useState("");
   const search = useDebounced(searchInput);
   const [status, setStatus] = useState<string>("all");
@@ -90,6 +244,9 @@ export default function Documents() {
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<Document | null>(null);
   const [deleting, setDeleting] = useState<Document | null>(null);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [importing, setImporting] = useState(false);
+
   const token = useAuth((s) => s.token);
 
   useEffect(() => {
@@ -116,10 +273,14 @@ export default function Documents() {
     { query: { queryKey: getListVehiclesQueryKey({ pageSize: 100 }) } },
   );
 
+  const create = useCreateDocument();
   const update = useUpdateDocument();
   const remove = useDeleteDocument();
 
   const [editState, setEditState] = useState<DocumentFormState | null>(null);
+
+  const vehicles = vehiclesQuery.data?.items ?? [];
+  const documents = data?.items ?? [];
 
   function openEdit(doc: Document) {
     setEditing(doc);
@@ -135,8 +296,16 @@ export default function Documents() {
     });
   }
 
+  async function invalidateDocuments() {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: getListDocumentsQueryKey() }),
+      qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
+    ]);
+  }
+
   async function handleEditSave() {
     if (!editing || !editState) return;
+
     try {
       await update.mutateAsync({
         id: editing.id,
@@ -150,86 +319,285 @@ export default function Documents() {
           fileName: editState.fileName ?? undefined,
         },
       });
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: getListDocumentsQueryKey() }),
-        qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
-      ]);
-      toast({ title: "Document updated" });
+
+      await invalidateDocuments();
+
+      toast({ title: "Hujjat yangilandi" });
       setEditing(null);
       setEditState(null);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Update failed";
-      toast({ title: "Update failed", description: message, variant: "destructive" });
+      const message = err instanceof Error ? err.message : "Hujjatni yangilab bo‘lmadi";
+      toast({ title: "Xatolik", description: message, variant: "destructive" });
     }
   }
 
   async function handleDelete() {
     if (!deleting) return;
+
     try {
       await remove.mutateAsync({ id: deleting.id });
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: getListDocumentsQueryKey() }),
-        qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
-      ]);
-      toast({ title: "Document deleted" });
+      await invalidateDocuments();
+
+      toast({ title: "Hujjat o‘chirildi" });
       setDeleting(null);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Delete failed";
-      toast({ title: "Delete failed", description: message, variant: "destructive" });
+      const message = err instanceof Error ? err.message : "Hujjatni o‘chirib bo‘lmadi";
+      toast({ title: "Xatolik", description: message, variant: "destructive" });
+    }
+  }
+
+  function handleExportCsv() {
+    const rows = documents.map((d) => ({
+      vehiclePlate: d.vehiclePlateNumber ?? "",
+      vehicleName: d.vehicleName ?? "",
+      name: d.name,
+      number: d.number,
+      startDate: new Date(d.startDate).toISOString().slice(0, 10),
+      endDate: new Date(d.endDate).toISOString().slice(0, 10),
+      note: d.note ?? "",
+      fileName: d.fileName ?? "",
+      fileUrl: d.fileUrl ?? "",
+    }));
+
+    downloadCsv("fleet-docs-hujjatlar.csv", rows);
+  }
+
+  function handleDownloadTemplate() {
+    downloadCsv("fleet-docs-import-template.csv", buildTemplateRows());
+  }
+
+  function findVehicleForRow(row: CsvRow) {
+    const plate = normalizePlate(row.vehiclePlate ?? "");
+    const name = (row.vehicleName ?? "").trim().toLowerCase();
+
+    if (plate) {
+      const byPlate = vehicles.find((v) => normalizePlate(v.plateNumber ?? "") === plate);
+      if (byPlate) return byPlate;
+    }
+
+    if (name) {
+      const byName = vehicles.find((v) => v.name.trim().toLowerCase() === name);
+      if (byName) return byName;
+    }
+
+    return null;
+  }
+
+  async function handleImportFile(file: File) {
+    setImportErrors([]);
+    setImporting(true);
+
+    try {
+      const text = await file.text();
+      const rows = parseCsv(text);
+      const errors: string[] = [];
+      let created = 0;
+
+      if (rows.length === 0) {
+        toast({
+          title: "CSV fayl bo‘sh",
+          description: "Import uchun kamida bitta hujjat qatori bo‘lishi kerak.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      for (let index = 0; index < rows.length; index++) {
+        const row = rows[index];
+        const rowNumber = index + 2;
+
+        try {
+          const vehicle = findVehicleForRow(row);
+
+          if (!vehicle) {
+            throw new Error(
+              `Transport topilmadi. vehiclePlate yoki vehicleName to‘g‘ri kiritilishi kerak.`,
+            );
+          }
+
+          const name = (row.name ?? "").trim();
+          const number = (row.number ?? "").trim();
+
+          if (!name) {
+            throw new Error("Hujjat nomi kiritilmagan");
+          }
+
+          await create.mutateAsync({
+            data: {
+              vehicleId: vehicle.id,
+              name,
+              number: number || "-",
+              startDate: toIsoDate(row.startDate ?? "", "startDate"),
+              endDate: toIsoDate(row.endDate ?? "", "endDate"),
+              note: row.note?.trim() || undefined,
+              fileName: row.fileName?.trim() || undefined,
+              fileUrl: row.fileUrl?.trim() || undefined,
+            },
+          });
+
+          created++;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Import xatosi";
+          errors.push(`${rowNumber}-qator: ${message}`);
+        }
+      }
+
+      await invalidateDocuments();
+
+      if (errors.length > 0) {
+        setImportErrors(errors);
+      }
+
+      toast({
+        title: "Import yakunlandi",
+        description: `${created} ta hujjat qo‘shildi. ${
+          errors.length > 0 ? `${errors.length} ta qatorda xato bor.` : ""
+        }`,
+        variant: errors.length > 0 ? "destructive" : "default",
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "CSV faylni o‘qib bo‘lmadi";
+      toast({ title: "Import xatosi", description: message, variant: "destructive" });
+    } finally {
+      setImporting(false);
+
+      if (importInputRef.current) {
+        importInputRef.current.value = "";
+      }
     }
   }
 
   return (
     <div>
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".csv,text/csv"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void handleImportFile(file);
+        }}
+      />
+
       <PageHeader
-        title="Documents"
+        title="Hujjatlar"
         description={
           data
-            ? `${data.total} document${data.total === 1 ? "" : "s"} across your fleet`
-            : "Permits, insurance, inspections — all in one place"
+            ? `${data.total} ta hujjat ro‘yxatga olingan`
+            : "Ruxsatnomalar, sug‘urta, texnik ko‘rik va boshqa hujjatlar yagona joyda"
         }
         actions={
-          <Button
-            onClick={() => setLocation("/documents/new")}
-            data-testid="button-add-document"
-          >
-            <Plus className="mr-1 h-4 w-4" />
-            New document
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={handleDownloadTemplate}
+              data-testid="button-download-import-template"
+            >
+              <FileSpreadsheet className="mr-1 h-4 w-4" />
+              Import shabloni
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => importInputRef.current?.click()}
+              disabled={importing || create.isPending || vehiclesQuery.isLoading}
+              data-testid="button-import-documents"
+            >
+              {importing ? (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="mr-1 h-4 w-4" />
+              )}
+              Import CSV
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={handleExportCsv}
+              disabled={documents.length === 0}
+              data-testid="button-export-documents"
+            >
+              <Download className="mr-1 h-4 w-4" />
+              Export CSV
+            </Button>
+
+            <Button
+              onClick={() => setLocation("/documents/new")}
+              data-testid="button-add-document"
+            >
+              <Plus className="mr-1 h-4 w-4" />
+              Hujjat qo‘shish
+            </Button>
+          </div>
         }
       />
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() =>
+            downloadReport(
+              "/api/reports/expiring-documents.xlsx",
+              "muddati-yaqin-hujjatlar.xlsx",
+              token,
+            )
+          }
+        >
+          <Download className="mr-1 h-4 w-4" />
+          Muddati yaqin Excel
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() =>
+            downloadReport(
+              "/api/reports/expired-documents.xlsx",
+              "muddati-otgan-hujjatlar.xlsx",
+              token,
+            )
+          }
+        >
+          <Download className="mr-1 h-4 w-4" />
+          Muddati o‘tgan Excel
+        </Button>
+      </div>
 
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
         <div className="relative sm:col-span-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search by name, number, or vehicle…"
+            placeholder="Nomi, raqami yoki transport bo‘yicha qidirish..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             className="pl-9"
             data-testid="input-search-documents"
           />
         </div>
+
         <Select value={status} onValueChange={setStatus}>
           <SelectTrigger data-testid="select-filter-status">
-            <SelectValue placeholder="Status" />
+            <SelectValue placeholder="Holat" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="valid">Valid</SelectItem>
-            <SelectItem value="expiring">Expiring</SelectItem>
-            <SelectItem value="expired">Expired</SelectItem>
+            <SelectItem value="all">Barcha holatlar</SelectItem>
+            <SelectItem value="valid">Amalda</SelectItem>
+            <SelectItem value="expiring">Muddati yaqin</SelectItem>
+            <SelectItem value="expired">Muddati o‘tgan</SelectItem>
           </SelectContent>
         </Select>
+
         <Select value={vehicleId} onValueChange={setVehicleId}>
           <SelectTrigger data-testid="select-filter-vehicle">
-            <SelectValue placeholder="Vehicle" />
+            <SelectValue placeholder="Transport" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All vehicles</SelectItem>
-            {(vehiclesQuery.data?.items ?? []).map((v) => (
+            <SelectItem value="all">Barcha transportlar</SelectItem>
+            {vehicles.map((v) => (
               <SelectItem key={v.id} value={v.id}>
-                {v.name}
+                {v.name} {v.plateNumber ? `— ${v.plateNumber}` : ""}
               </SelectItem>
             ))}
           </SelectContent>
@@ -238,7 +606,7 @@ export default function Documents() {
 
       {isLoading ? (
         <Card>
-          <CardContent className="p-4 space-y-2">
+          <CardContent className="space-y-2 p-4">
             {Array.from({ length: 6 }).map((_, i) => (
               <Skeleton key={i} className="h-12 w-full" />
             ))}
@@ -247,65 +615,47 @@ export default function Documents() {
       ) : !data || data.items.length === 0 ? (
         <EmptyState
           icon={FileText}
-          title={search || status !== "all" || vehicleId !== "all" ? "No matching documents" : "No documents yet"}
+          title={
+            search || status !== "all" || vehicleId !== "all"
+              ? "Mos hujjatlar topilmadi"
+              : "Hujjatlar hali qo‘shilmagan"
+          }
           description={
             search || status !== "all" || vehicleId !== "all"
-              ? "Try clearing or adjusting filters."
-              : "Add the first permit or insurance for any vehicle to start tracking expiry."
+              ? "Filtrlarni tozalang yoki qidiruv so‘zini o‘zgartiring."
+              : "Transport hujjatlarini qo‘shing yoki CSV orqali import qiling."
           }
           action={
-            <Button onClick={() => setLocation("/documents/new")}>
-              <Plus className="mr-1 h-4 w-4" />
-              Add document
-            </Button>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button variant="outline" onClick={() => importInputRef.current?.click()}>
+                <Upload className="mr-1 h-4 w-4" />
+                Import CSV
+              </Button>
 
-
-
+              <Button onClick={() => setLocation("/documents/new")}>
+                <Plus className="mr-1 h-4 w-4" />
+                Hujjat qo‘shish
+              </Button>
+            </div>
           }
         />
       ) : (
         <>
-        <button
-  type="button"
-  className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted"
-  onClick={() =>
-    downloadReport(
-      "/api/reports/expiring-documents.xlsx",
-      "muddati-yaqin-hujjatlar.xlsx",
-      token,
-    )
-  }
->
-  Expiring Excel
-</button>
-
-<button
-  type="button"
-  className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted"
-  onClick={() =>
-    downloadReport(
-      "/api/reports/expired-documents.xlsx",
-      "muddati-otgan-hujjatlar.xlsx",
-      token,
-    )
-  }
->
-  Expired Excel
-</button>
           <Card className="hidden md:block">
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/40">
-                    <TableHead>Document</TableHead>
-                    <TableHead>Vehicle</TableHead>
-                    <TableHead>Number</TableHead>
-                    <TableHead>Valid through</TableHead>
-                    <TableHead>Days</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>Hujjat</TableHead>
+                    <TableHead>Transport</TableHead>
+                    <TableHead>Raqami</TableHead>
+                    <TableHead>Amal qilish muddati</TableHead>
+                    <TableHead>Kun</TableHead>
+                    <TableHead>Holat</TableHead>
                     <TableHead />
                   </TableRow>
                 </TableHeader>
+
                 <TableBody>
                   {data.items.map((d, i) => (
                     <motion.tr
@@ -324,6 +674,7 @@ export default function Documents() {
                           ) : null}
                         </div>
                       </TableCell>
+
                       <TableCell>
                         <Link
                           href={`/vehicles/${d.vehicleId}`}
@@ -337,18 +688,25 @@ export default function Documents() {
                           ) : null}
                         </Link>
                       </TableCell>
+
                       <TableCell className="font-mono text-xs text-muted-foreground">
                         {d.number}
                       </TableCell>
+
                       <TableCell className="text-sm text-muted-foreground">
                         {format(new Date(d.endDate), "MMM d, yyyy")}
                       </TableCell>
+
                       <TableCell className="text-sm text-muted-foreground">
-                        {d.daysRemaining < 0 ? `${Math.abs(d.daysRemaining)}d ago` : `${d.daysRemaining}d`}
+                        {d.daysRemaining < 0
+                          ? `${Math.abs(d.daysRemaining)} kun oldin`
+                          : `${d.daysRemaining} kun`}
                       </TableCell>
+
                       <TableCell>
                         <StatusPill status={d.status} />
                       </TableCell>
+
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -360,27 +718,29 @@ export default function Documents() {
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
+
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => setLocation(`/vehicles/${d.vehicleId}`)}>
-                              View vehicle
+                              Transportni ko‘rish
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openEdit(d)}>Edit</DropdownMenuItem>
+
+                            <DropdownMenuItem onClick={() => openEdit(d)}>
+                              Tahrirlash
+                            </DropdownMenuItem>
+
                             {d.fileUrl ? (
-                              <DropdownMenuItem asChild>
-                               <button
-                                      type="button"
-                                      className="text-blue-600 hover:underline"
-                                      onClick={() => downloadDocumentFile(d.fileUrl!, d.fileName, token)}
-                                      >
-                                      {d.fileName || "Faylni yuklab olish"}
-                              </button>
+                              <DropdownMenuItem
+                                onClick={() => downloadDocumentFile(d.fileUrl!, d.fileName, token)}
+                              >
+                                Faylni yuklab olish
                               </DropdownMenuItem>
                             ) : null}
+
                             <DropdownMenuItem
                               className="text-rose-600 focus:text-rose-600"
                               onClick={() => setDeleting(d)}
                             >
-                              Delete
+                              O‘chirish
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -403,12 +763,14 @@ export default function Documents() {
                         {d.vehicleName} • {d.vehiclePlateNumber}
                       </p>
                     </div>
+
                     <StatusPill status={d.status} />
                   </div>
+
                   <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Valid through {format(new Date(d.endDate), "MMM d, yyyy")}</span>
+                    <span>{format(new Date(d.endDate), "MMM d, yyyy")}</span>
                     <Button variant="ghost" size="sm" onClick={() => openEdit(d)}>
-                      Edit
+                      Tahrirlash
                     </Button>
                   </div>
                 </CardContent>
@@ -428,17 +790,24 @@ export default function Documents() {
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Edit document</DialogTitle>
+            <DialogTitle>Hujjatni tahrirlash</DialogTitle>
           </DialogHeader>
+
           {editState ? (
             <DocumentFormFields state={editState} onChange={setEditState} lockVehicle />
           ) : null}
+
           <DialogFooter>
             <Button variant="ghost" onClick={() => setEditing(null)}>
-              Cancel
+              Bekor qilish
             </Button>
+
             <Button onClick={handleEditSave} disabled={update.isPending}>
-              {update.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save changes"}
+              {update.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Saqlash"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -447,22 +816,47 @@ export default function Documents() {
       <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete document?</AlertDialogTitle>
+            <AlertDialogTitle>Hujjat o‘chirilsinmi?</AlertDialogTitle>
             <AlertDialogDescription>
-              {deleting?.name} for {deleting?.vehicleName} will be permanently removed.
+              {deleting?.name} hujjati butunlay o‘chiriladi. Bu amalni ortga qaytarib bo‘lmaydi.
             </AlertDialogDescription>
           </AlertDialogHeader>
+
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Bekor qilish</AlertDialogCancel>
             <AlertDialogAction
               className="bg-rose-600 hover:bg-rose-600/90"
               onClick={handleDelete}
             >
-              {remove.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+              {remove.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "O‘chirish"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={importErrors.length > 0} onOpenChange={(o) => !o && setImportErrors([])}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Importdagi xatolar</DialogTitle>
+          </DialogHeader>
+
+          <div className="max-h-80 space-y-2 overflow-y-auto rounded-md border bg-muted/30 p-3">
+            {importErrors.map((error, index) => (
+              <p key={`${error}-${index}`} className="text-sm text-rose-600">
+                {error}
+              </p>
+            ))}
+          </div>
+
+          <DialogFooter>
+            <Button onClick={() => setImportErrors([])}>Yopish</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
