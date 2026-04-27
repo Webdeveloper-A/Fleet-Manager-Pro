@@ -4,12 +4,12 @@ import {
   Truck,
   FileText,
   Building2,
-  ShieldCheck,
   Bot,
   LifeBuoy,
   Send,
   ScrollText,
   ClipboardCheck,
+  Megaphone,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -69,6 +69,12 @@ const NAV: NavItem[] = [
     roles: ["company"],
   },
   {
+    href: "/ads",
+    labelKey: "ads",
+    icon: Megaphone,
+    roles: ["company", "admin"],
+  },
+  {
     href: "/admin/support",
     labelKey: "support",
     icon: LifeBuoy,
@@ -95,22 +101,24 @@ export function Sidebar() {
       className="fixed inset-y-0 left-0 z-30 hidden border-r border-border/60 bg-sidebar md:flex md:w-64 md:flex-col"
       data-testid="sidebar"
     >
-      <div className="flex h-16 items-center gap-2 border-b border-border/60 px-6">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/70 text-primary-foreground shadow-sm">
-          <ShieldCheck className="h-5 w-5" />
-        </div>
+      <div className="flex min-h-20 items-center gap-3 border-b border-border/60 px-4 py-4">
+        <img
+          src="/branding/nazorat24-logo.png"
+          alt="NAZORAT 24"
+          className="h-12 w-12 shrink-0 rounded-xl object-cover shadow-sm"
+        />
 
-        <div>
-          <p className="text-sm font-semibold tracking-tight text-foreground">
-            {t("appName")}
+        <div className="min-w-0">
+          <p className="truncate text-base font-bold tracking-tight text-foreground">
+            NAZORAT 24
           </p>
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            {t("appSubtitle")}
+          <p className="mt-0.5 text-[10px] uppercase leading-4 tracking-[0.18em] text-muted-foreground">
+            Transport va hujjat boshqaruvi
           </p>
         </div>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-0.5 px-3 py-4">
+      <nav className="flex flex-1 flex-col gap-1 px-3 py-4">
         {items.map((item) => {
           const Icon = item.icon;
           const active =
@@ -124,7 +132,7 @@ export function Sidebar() {
               href={item.href}
               data-testid={`link-nav-${item.labelKey}`}
               className={cn(
-                "group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                 active
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -138,13 +146,13 @@ export function Sidebar() {
                     : "text-muted-foreground group-hover:text-foreground",
                 )}
               />
-              {t(item.labelKey)}
+              <span className="truncate">{t(item.labelKey)}</span>
             </Link>
           );
         })}
       </nav>
 
-      <div className="border-t border-border/60 px-6 py-4 text-xs text-muted-foreground">
+      <div className="border-t border-border/60 px-5 py-4 text-xs text-muted-foreground">
         {t("signedInAs")}
         <p className="mt-0.5 truncate text-foreground" data-testid="text-sidebar-email">
           {principal?.email}

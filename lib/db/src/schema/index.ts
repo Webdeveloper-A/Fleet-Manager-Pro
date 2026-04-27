@@ -6,3 +6,4 @@ export * from "./support";
 export * from "./telegram";
 export * from "./tir-carnets";
 export * from "./dazvols";
+export * from "./ads";

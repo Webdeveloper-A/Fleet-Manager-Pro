@@ -14,6 +14,7 @@ import supportRouter from "./support";
 import telegramRouter from "./telegram";
 import tirCarnetsRouter from "./tir-carnets";
 import dazvolsRouter from "./dazvols";
+import adsRouter from "./ads";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(profileRouter);
 router.use(telegramRouter);
 router.use(tirCarnetsRouter);
 router.use(dazvolsRouter);
+router.use(adsRouter);
 
 export default router;

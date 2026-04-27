@@ -2,7 +2,7 @@ import { usePreferences, type Language } from "@/lib/preferences";
 
 const translations = {
   uz: {
-    appName: "Fleet Docs",
+    appName: "NAZORAT 24",
     appSubtitle: "Transport va hujjat boshqaruvi",
 
     dashboard: "Boshqaruv paneli",
@@ -14,6 +14,9 @@ dazvols: "Dazvollar",
     support: "Support",
 telegram: "Telegram",
     callBot: "Support markazi",
+ads: "Reklama",
+
+
 
     adminConsole: "Admin panel",
     platformAdministrator: "Platforma administratori",
@@ -61,7 +64,7 @@ telegram: "Telegram",
   },
 
   ru: {
-    appName: "Fleet Docs",
+    appName: "NAZORAT 24",
     appSubtitle: "Управление транспортом и документами",
 
     dashboard: "Панель управления",
@@ -73,6 +76,9 @@ dazvols: "Дозволы",
     support: "Поддержка",
 telegram: "Telegram",
     callBot: "Центр поддержки",
+ads: "Реклама",
+
+
 
     adminConsole: "Админ-панель",
     platformAdministrator: "Администратор платформы",
@@ -120,7 +126,7 @@ telegram: "Telegram",
   },
 
   en: {
-    appName: "Fleet Docs",
+    appName: "NAZORAT 24",
     appSubtitle: "Vehicle and document management",
 
     dashboard: "Dashboard",
@@ -132,6 +138,9 @@ dazvols: "Permits",
     support: "Support",
 telegram: "Telegram",
     callBot: "Support Center",
+ads: "Ads",
+
+
 
     adminConsole: "Admin Console",
     platformAdministrator: "Platform administrator",
