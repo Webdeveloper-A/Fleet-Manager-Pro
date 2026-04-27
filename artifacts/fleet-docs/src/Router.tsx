@@ -15,6 +15,7 @@ import CallBot from "@/pages/CallBot";
 import Profile from "@/pages/Profile";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
+import AdminSupport from "@/pages/AdminSupport";
 
 function ProtectedShell({
   children,
@@ -132,6 +133,12 @@ export default function Router() {
           <Profile />
         </ProtectedShell>
       </Route>
+
+<Route path="/admin/support">
+  <ProtectedShell adminOnly>
+    <AdminSupport />
+  </ProtectedShell>
+</Route>
 
       <Route path="/admin/companies">
         <ProtectedShell adminOnly>

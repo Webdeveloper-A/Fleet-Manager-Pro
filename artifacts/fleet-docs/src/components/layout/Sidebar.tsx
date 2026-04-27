@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, Truck, FileText, Building2, ShieldCheck, Bot } from "lucide-react";
+import { Home, Truck, FileText, Building2, ShieldCheck, Bot, LifeBuoy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { useT, type TranslationKey } from "@/lib/i18n";
@@ -11,6 +11,12 @@ const NAV = [
   { href: "/vehicles", labelKey: "vehicles", icon: Truck, roles: ["company"] as const },
   { href: "/documents", labelKey: "documents", icon: FileText, roles: ["company"] as const },
   { href: "/call-bot", labelKey: "callBot", icon: Bot, roles: ["company"] as const },
+  {
+    href: "/admin/support",
+    labelKey: "support",
+    icon: LifeBuoy,
+    roles: ["admin"] as const,
+  },
   {
     href: "/admin/companies",
     labelKey: "companies",

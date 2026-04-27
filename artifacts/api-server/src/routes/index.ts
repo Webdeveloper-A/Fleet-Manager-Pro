@@ -10,9 +10,11 @@ import storageRouter from "./storage";
 import { uploadsRouter } from "./upload-routes";
 import reportsRouter from "./reports";
 import profileRouter from "./profile";
+import supportRouter from "./support";
 
 const router: IRouter = Router();
 
+router.use(supportRouter);
 router.use(uploadsRouter);
 router.use(healthRouter);
 router.use(authRouter);

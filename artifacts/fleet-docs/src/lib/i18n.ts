@@ -3,146 +3,170 @@ import { usePreferences, type Language } from "@/lib/preferences";
 const translations = {
   uz: {
     appName: "Fleet Docs",
-    appSubtitle: "Operatsion boshqaruv",
+    appSubtitle: "Transport va hujjat boshqaruvi",
 
     dashboard: "Boshqaruv paneli",
     vehicles: "Transportlar",
     documents: "Hujjatlar",
     companies: "Kompaniyalar",
-    callBot: "Call Bot",
+    support: "Support",
+    callBot: "Support markazi",
 
     adminConsole: "Admin panel",
     platformAdministrator: "Platforma administratori",
-    vehicleDocumentManagement: "Transport va hujjat boshqaruvi",
+    vehicleDocumentManagement: "Transport vositalari va hujjatlarni boshqarish",
 
     notifications: "Bildirishnomalar",
     notificationsDescription: "Transport hujjatlari muddati bo‘yicha ogohlantirishlar",
-    noNotifications: "Hozircha bildirishnoma yo‘q",
+    noNotifications: "Hozircha bildirishnoma mavjud emas",
     expired: "Muddati o‘tgan",
-    expiring: "Muddati yaqin",
+    expiring: "Muddati yaqinlashmoqda",
 
     profile: "Profil",
     language: "Til",
-    theme: "Rejim",
-    light: "Light",
-    dark: "Dark",
-    system: "System",
-    signOut: "Chiqish",
-    signedInAs: "Kirish qilingan",
+    theme: "Ko‘rinish rejimi",
+    light: "Yorug‘ rejim",
+    dark: "Tungi rejim",
+    system: "Tizim sozlamasi",
+    signOut: "Tizimdan chiqish",
+    signedInAs: "Tizimga kirgan foydalanuvchi",
 
     profileSettings: "Profil sozlamalari",
-    profileSettingsHint: "Profil nomi, email va parolni tahrirlash keyingi bosqichda qo‘shiladi.",
-    openCallBot: "Call Botni ochish",
+    profileSettingsHint:
+      "Profil ma’lumotlarini boshqarish orqali foydalanuvchi hisobini qulay va xavfsiz yuritish mumkin.",
+    openCallBot: "Support markazini ochish",
 
-    callBotTitle: "Call Center Bot",
-    callBotDescription: "Platformadan foydalanish bo‘yicha tezkor yordamchi.",
+    callBotTitle: "Mijozlarni qo‘llab-quvvatlash markazi",
+    callBotDescription:
+      "Platforma bo‘yicha savol, texnik muammo va takliflar uchun yagona murojaat markazi.",
     callBotIntro:
-      "Bu bo‘lim hozir frontend yordamchi sifatida ishlaydi. Keyingi bosqichda operator bilan chat, support history va Telegram bilan bog‘lash qo‘shiladi.",
-    quickHelp: "Tezkor yordam",
+      "Murojaatlaringiz support tizimida qayd etiladi. Mas’ul mutaxassislar javoblari ushbu sahifada aks etadi.",
+    quickHelp: "Tezkor yo‘riqnoma",
+
     helpDocuments: "Hujjat qo‘shish",
-    helpDocumentsText: "Documents sahifasiga kiring, Add document tugmasini bosing va kerakli ma’lumotlarni kiriting.",
-    helpUpload: "Fayl yuklash",
-    helpUploadText: "PDF, JPG, PNG yoki WEBP faylni hujjat formasida tanlang.",
-    helpTelegram: "Telegram xabar",
-    helpTelegramText: "Dashboard sahifasida Telegram Test yoki Send Expiry Alerts tugmasini bosing.",
-    helpReports: "Excel hisobot",
-    helpReportsText: "Documents sahifasida Expiring Excel yoki Expired Excel tugmasidan foydalaning.",
+    helpDocumentsText:
+      "Hujjatlar bo‘limida transport vositasiga tegishli hujjatni qo‘shing va amal qilish muddatini kiriting.",
+    helpUpload: "Fayl biriktirish",
+    helpUploadText:
+      "PDF, JPG, PNG yoki WEBP formatidagi faylni hujjat formasiga biriktiring.",
+    helpTelegram: "Telegram bildirishnomalari",
+    helpTelegramText:
+      "Dashboard orqali test xabar yuboring yoki muddati yaqinlashgan hujjatlar bo‘yicha ogohlantirishlarni jo‘nating.",
+    helpReports: "Excel hisobotlar",
+    helpReportsText:
+      "Hujjatlar sahifasida muddati yaqinlashgan yoki muddati o‘tgan hujjatlar bo‘yicha Excel hisobot yuklab oling.",
   },
 
   ru: {
     appName: "Fleet Docs",
-    appSubtitle: "Операционная панель",
+    appSubtitle: "Управление транспортом и документами",
 
-    dashboard: "Панель",
+    dashboard: "Панель управления",
     vehicles: "Транспорт",
     documents: "Документы",
     companies: "Компании",
-    callBot: "Call Bot",
+    support: "Поддержка",
+    callBot: "Центр поддержки",
 
     adminConsole: "Админ-панель",
     platformAdministrator: "Администратор платформы",
     vehicleDocumentManagement: "Управление транспортом и документами",
 
     notifications: "Уведомления",
-    notificationsDescription: "Оповещения о сроках документов транспорта",
-    noNotifications: "Пока нет уведомлений",
-    expired: "Истекло",
-    expiring: "Скоро истекает",
+    notificationsDescription: "Оповещения о сроках действия транспортных документов",
+    noNotifications: "Уведомлений пока нет",
+    expired: "Срок истёк",
+    expiring: "Срок скоро истекает",
 
     profile: "Профиль",
     language: "Язык",
-    theme: "Тема",
-    light: "Светлая",
-    dark: "Темная",
-    system: "Системная",
-    signOut: "Выйти",
+    theme: "Режим отображения",
+    light: "Светлая тема",
+    dark: "Тёмная тема",
+    system: "Системная тема",
+    signOut: "Выйти из системы",
     signedInAs: "Вы вошли как",
 
     profileSettings: "Настройки профиля",
-    profileSettingsHint: "Редактирование имени, email и пароля будет добавлено на следующем этапе.",
-    openCallBot: "Открыть Call Bot",
+    profileSettingsHint:
+      "Управление данными профиля помогает удобно и безопасно использовать учетную запись.",
+    openCallBot: "Открыть центр поддержки",
 
-    callBotTitle: "Call Center Bot",
-    callBotDescription: "Быстрый помощник по работе с платформой.",
+    callBotTitle: "Центр поддержки клиентов",
+    callBotDescription:
+      "Единый центр обращений по вопросам, техническим проблемам и предложениям по работе платформы.",
     callBotIntro:
-      "Сейчас этот раздел работает как frontend-помощник. Позже добавим чат с оператором, историю обращений и Telegram-интеграцию.",
-    quickHelp: "Быстрая помощь",
-    helpDocuments: "Добавить документ",
-    helpDocumentsText: "Откройте Documents, нажмите Add document и заполните данные.",
-    helpUpload: "Загрузить файл",
-    helpUploadText: "Выберите PDF, JPG, PNG или WEBP файл в форме документа.",
-    helpTelegram: "Telegram-уведомление",
-    helpTelegramText: "На Dashboard нажмите Telegram Test или Send Expiry Alerts.",
-    helpReports: "Excel-отчет",
-    helpReportsText: "На странице Documents используйте Expiring Excel или Expired Excel.",
+      "Ваши обращения фиксируются в системе поддержки. Ответы ответственных специалистов отображаются на этой странице.",
+    quickHelp: "Краткое руководство",
+
+    helpDocuments: "Добавление документа",
+    helpDocumentsText:
+      "В разделе документов добавьте документ, связанный с транспортом, и укажите срок его действия.",
+    helpUpload: "Прикрепление файла",
+    helpUploadText:
+      "Прикрепите к форме документа файл в формате PDF, JPG, PNG или WEBP.",
+    helpTelegram: "Telegram-уведомления",
+    helpTelegramText:
+      "На панели управления отправьте тестовое сообщение или уведомления по документам с истекающим сроком.",
+    helpReports: "Excel-отчёты",
+    helpReportsText:
+      "На странице документов загрузите Excel-отчёт по документам с истекающим или истекшим сроком.",
   },
 
   en: {
     appName: "Fleet Docs",
-    appSubtitle: "Operations cockpit",
+    appSubtitle: "Vehicle and document management",
 
     dashboard: "Dashboard",
     vehicles: "Vehicles",
     documents: "Documents",
     companies: "Companies",
-    callBot: "Call Bot",
+    support: "Support",
+    callBot: "Support Center",
 
     adminConsole: "Admin Console",
     platformAdministrator: "Platform administrator",
-    vehicleDocumentManagement: "Vehicle & document management",
+    vehicleDocumentManagement: "Vehicle and document management",
 
     notifications: "Notifications",
-    notificationsDescription: "Document expiry alerts for your fleet",
+    notificationsDescription: "Expiry alerts for vehicle documents",
     noNotifications: "No notifications yet",
     expired: "Expired",
-    expiring: "Expiring",
+    expiring: "Expiring soon",
 
     profile: "Profile",
     language: "Language",
-    theme: "Theme",
-    light: "Light",
-    dark: "Dark",
-    system: "System",
+    theme: "Appearance",
+    light: "Light mode",
+    dark: "Dark mode",
+    system: "System setting",
     signOut: "Sign out",
     signedInAs: "Signed in as",
 
     profileSettings: "Profile settings",
-    profileSettingsHint: "Editing profile name, email and password will be added in the next stage.",
-    openCallBot: "Open Call Bot",
+    profileSettingsHint:
+      "Profile management helps keep your account convenient and secure.",
+    openCallBot: "Open Support Center",
 
-    callBotTitle: "Call Center Bot",
-    callBotDescription: "Quick assistant for using the platform.",
+    callBotTitle: "Customer Support Center",
+    callBotDescription:
+      "A single support center for platform questions, technical issues, and service requests.",
     callBotIntro:
-      "This section currently works as a frontend helper. Operator chat, support history and Telegram integration will be added later.",
-    quickHelp: "Quick help",
-    helpDocuments: "Add document",
-    helpDocumentsText: "Go to Documents, click Add document and fill in the required fields.",
-    helpUpload: "Upload file",
-    helpUploadText: "Choose a PDF, JPG, PNG or WEBP file in the document form.",
-    helpTelegram: "Telegram alert",
-    helpTelegramText: "On Dashboard, click Telegram Test or Send Expiry Alerts.",
-    helpReports: "Excel report",
-    helpReportsText: "On the Documents page, use Expiring Excel or Expired Excel.",
+      "Your requests are registered in the support system. Responses from the responsible specialists are displayed on this page.",
+    quickHelp: "Quick guide",
+
+    helpDocuments: "Add a document",
+    helpDocumentsText:
+      "In the Documents section, add a document related to a vehicle and enter its validity period.",
+    helpUpload: "Attach a file",
+    helpUploadText:
+      "Attach a PDF, JPG, PNG, or WEBP file to the document form.",
+    helpTelegram: "Telegram notifications",
+    helpTelegramText:
+      "Use the dashboard to send a test message or send alerts for documents nearing expiry.",
+    helpReports: "Excel reports",
+    helpReportsText:
+      "On the Documents page, download Excel reports for expiring or expired documents.",
   },
 } satisfies Record<Language, Record<string, string>>;
 
