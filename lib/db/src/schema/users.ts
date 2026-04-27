@@ -15,11 +15,13 @@ export const companiesTable = pgTable("companies", {
 
 export const usersTable = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
+  name: varchar("name", { length: 255 }),
   email: varchar("email", { length: 255 }).notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   role: userRoleEnum("role").notNull().default("company"),
   companyId: uuid("company_id").references(() => companiesTable.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const companiesRelations = relations(companiesTable, ({ many }) => ({

@@ -5,7 +5,6 @@ import { usersTable, companiesTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 
 declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       principal?: Principal;
@@ -19,12 +18,15 @@ export async function requireAuth(
   next: NextFunction,
 ): Promise<void> {
   const header = req.headers.authorization;
+
   if (!header || !header.toLowerCase().startsWith("bearer ")) {
     res.status(401).json({ error: "Missing or invalid Authorization header" });
     return;
   }
+
   const token = header.slice(7).trim();
   const payload = verifyToken(token);
+
   if (!payload) {
     res.status(401).json({ error: "Invalid or expired token" });
     return;
@@ -55,6 +57,7 @@ export async function requireAuth(
     companyId: user.companyId,
     companyName: user.companyName,
   };
+
   next();
 }
 
@@ -67,6 +70,7 @@ export function requireAdmin(
     res.status(403).json({ error: "Admin only" });
     return;
   }
+
   next();
 }
 
@@ -76,8 +80,9 @@ export function requireCompany(
   next: NextFunction,
 ): void {
   if (!req.principal || req.principal.role !== "company" || !req.principal.companyId) {
-    res.status(403).json({ error: "Company account required" });
+    res.status(403).json({ error: "Company only" });
     return;
   }
+
   next();
 }

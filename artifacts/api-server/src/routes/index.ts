@@ -9,9 +9,11 @@ import notificationsRouter from "./notifications";
 import storageRouter from "./storage";
 import { uploadsRouter } from "./upload-routes";
 import reportsRouter from "./reports";
+import profileRouter from "./profile";
 
 const router: IRouter = Router();
 
+router.use(profileRouter);
 router.use(uploadsRouter);
 router.use(healthRouter);
 router.use(authRouter);
