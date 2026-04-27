@@ -12,6 +12,8 @@ import reportsRouter from "./reports";
 import profileRouter from "./profile";
 import supportRouter from "./support";
 import telegramRouter from "./telegram";
+import tirCarnetsRouter from "./tir-carnets";
+import dazvolsRouter from "./dazvols";
 
 const router: IRouter = Router();
 
@@ -28,5 +30,7 @@ router.use(storageRouter);
 router.use(reportsRouter);
 router.use(profileRouter);
 router.use(telegramRouter);
+router.use(tirCarnetsRouter);
+router.use(dazvolsRouter);
 
 export default router;

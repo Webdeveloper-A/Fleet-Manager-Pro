@@ -4,3 +4,5 @@ export * from "./documents";
 export * from "./notifications";
 export * from "./support";
 export * from "./telegram";
+export * from "./tir-carnets";
+export * from "./dazvols";
