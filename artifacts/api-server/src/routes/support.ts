@@ -4,10 +4,12 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
   companiesTable,
+  companyTelegramLinksTable,
   supportMessagesTable,
   supportTicketsTable,
 } from "@workspace/db/schema";
 import { requireAdmin, requireAuth, requireCompany } from "../middlewares/auth";
+import { sendTelegramMessageToChat } from "../lib/telegram-bots";
 
 const router: IRouter = Router();
 
@@ -78,6 +80,48 @@ async function getTicketForAccess(ticketId: string, req: Request) {
   }
 
   return null;
+}
+
+async function sendSupportReplyToTelegram({
+  companyId,
+  subject,
+  body,
+}: {
+  companyId: string;
+  subject: string;
+  body: string;
+}) {
+  const [link] = await db
+    .select()
+    .from(companyTelegramLinksTable)
+    .where(
+      and(
+        eq(companyTelegramLinksTable.companyId, companyId),
+        eq(companyTelegramLinksTable.botType, "support"),
+        eq(companyTelegramLinksTable.isActive, true),
+      ),
+    )
+    .limit(1);
+
+  if (!link) {
+    return false;
+  }
+
+  await sendTelegramMessageToChat({
+    botType: "support",
+    chatId: link.telegramChatId,
+    text: [
+      "💬 Support javobi",
+      "",
+      `Murojaat: ${subject}`,
+      "",
+      body,
+      "",
+      "Javob support markazida ham saqlangan.",
+    ].join("\n"),
+  });
+
+  return true;
 }
 
 router.get("/support/tickets", requireAuth, async (req: Request, res: Response) => {
@@ -153,7 +197,14 @@ router.post(
         ...ticket,
         companyName: principal.companyName ?? null,
       }),
-      message,
+      message: {
+        id: message.id,
+        ticketId: message.ticketId,
+        senderRole: message.senderRole,
+        senderEmail: message.senderEmail,
+        body: message.body,
+        createdAt: message.createdAt,
+      },
     });
   },
 );
@@ -228,6 +279,20 @@ router.post("/support/tickets/:id/messages", requireAuth, async (req: Request, r
     })
     .where(eq(supportTicketsTable.id, ticket.id));
 
+  let telegramSent = false;
+
+  if (senderRole === "admin") {
+    try {
+      telegramSent = await sendSupportReplyToTelegram({
+        companyId: ticket.companyId,
+        subject: ticket.subject,
+        body: parsed.data.body,
+      });
+    } catch (err) {
+      console.error("[support] telegram reply failed", err);
+    }
+  }
+
   res.status(201).json({
     id: message.id,
     ticketId: message.ticketId,
@@ -235,6 +300,7 @@ router.post("/support/tickets/:id/messages", requireAuth, async (req: Request, r
     senderEmail: message.senderEmail,
     body: message.body,
     createdAt: message.createdAt,
+    telegramSent,
   });
 });
 

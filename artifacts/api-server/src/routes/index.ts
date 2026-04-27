@@ -11,6 +11,7 @@ import { uploadsRouter } from "./upload-routes";
 import reportsRouter from "./reports";
 import profileRouter from "./profile";
 import supportRouter from "./support";
+import telegramRouter from "./telegram";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(notificationsRouter);
 router.use(storageRouter);
 router.use(reportsRouter);
 router.use(profileRouter);
+router.use(telegramRouter);
 
 export default router;

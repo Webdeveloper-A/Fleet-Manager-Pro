@@ -10,6 +10,7 @@ const translations = {
     documents: "Hujjatlar",
     companies: "Kompaniyalar",
     support: "Support",
+telegram: "Telegram",
     callBot: "Support markazi",
 
     adminConsole: "Admin panel",
@@ -66,6 +67,7 @@ const translations = {
     documents: "Документы",
     companies: "Компании",
     support: "Поддержка",
+telegram: "Telegram",
     callBot: "Центр поддержки",
 
     adminConsole: "Админ-панель",
@@ -122,6 +124,7 @@ const translations = {
     documents: "Documents",
     companies: "Companies",
     support: "Support",
+telegram: "Telegram",
     callBot: "Support Center",
 
     adminConsole: "Admin Console",

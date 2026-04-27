@@ -16,6 +16,7 @@ import Profile from "@/pages/Profile";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 import AdminSupport from "@/pages/AdminSupport";
+import TelegramSettings from "@/pages/TelegramSettings";
 
 function ProtectedShell({
   children,
@@ -91,6 +92,12 @@ export default function Router() {
           <Dashboard />
         </ProtectedShell>
       </Route>
+
+<Route path="/telegram">
+  <ProtectedShell>
+    <TelegramSettings />
+  </ProtectedShell>
+</Route>
 
       <Route path="/vehicles">
         <ProtectedShell>

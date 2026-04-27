@@ -24,6 +24,10 @@ export const JWT_EXPIRES_IN = optionalEnv("JWT_EXPIRES_IN") ?? "7d";
 export const TELEGRAM_BOT_TOKEN = optionalEnv("TELEGRAM_BOT_TOKEN");
 
 export const TELEGRAM_CHAT_ID = optionalEnv("TELEGRAM_CHAT_ID");
+export const TELEGRAM_ALERT_BOT_TOKEN =
+  optionalEnv("TELEGRAM_ALERT_BOT_TOKEN") ?? TELEGRAM_BOT_TOKEN;
+
+export const TELEGRAM_SUPPORT_BOT_TOKEN = optionalEnv("TELEGRAM_SUPPORT_BOT_TOKEN");
 
 export const ENABLE_DEMO_SEED = optionalEnv("ENABLE_DEMO_SEED") === "true";
 
@@ -46,9 +50,9 @@ export function validateBackendEnv(): void {
     throw new Error("ENABLE_DEMO_SEED must not be true in production.");
   }
 
-  if ((TELEGRAM_BOT_TOKEN && !TELEGRAM_CHAT_ID) || (!TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID)) {
-    throw new Error("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be configured together.");
-  }
+if (TELEGRAM_CHAT_ID && !TELEGRAM_ALERT_BOT_TOKEN) {
+  throw new Error("TELEGRAM_CHAT_ID requires TELEGRAM_ALERT_BOT_TOKEN or TELEGRAM_BOT_TOKEN.");
+}
 
   if (!["local", "r2"].includes(STORAGE_DRIVER)) {
     throw new Error("STORAGE_DRIVER must be either 'local' or 'r2'.");

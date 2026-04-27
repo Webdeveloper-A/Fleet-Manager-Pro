@@ -1,10 +1,15 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db } from "@workspace/db";
-import { notificationsTable, documentsTable, vehiclesTable } from "@workspace/db/schema";
+import {
+  companyTelegramLinksTable,
+  documentsTable,
+  notificationsTable,
+  vehiclesTable,
+} from "@workspace/db/schema";
 import { and, asc, desc, eq, lte } from "drizzle-orm";
 import { requireAuth, requireCompany } from "../middlewares/auth";
 import { EXPIRING_THRESHOLD_DAYS, statusFor } from "../lib/status";
-import { isTelegramConfigured, sendTelegramMessage } from "../lib/telegram";
+import { isTelegramBotConfigured, sendTelegramMessageToChat } from "../lib/telegram-bots";
 
 const router: IRouter = Router();
 
@@ -12,6 +17,30 @@ function daysLabel(daysRemaining: number) {
   if (daysRemaining < 0) return `${Math.abs(daysRemaining)} kun oldin tugagan`;
   if (daysRemaining === 0) return "bugun tugaydi";
   return `${daysRemaining} kun qoldi`;
+}
+
+function dateLabel(value: Date) {
+  return value.toLocaleDateString("uz-UZ", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
+async function getCompanyTelegramLink(companyId: string) {
+  const [link] = await db
+    .select()
+    .from(companyTelegramLinksTable)
+    .where(
+      and(
+        eq(companyTelegramLinksTable.companyId, companyId),
+        eq(companyTelegramLinksTable.botType, "alerts"),
+        eq(companyTelegramLinksTable.isActive, true),
+      ),
+    )
+    .limit(1);
+
+  return link ?? null;
 }
 
 router.get(
@@ -52,7 +81,7 @@ router.get(
       });
     } catch (err) {
       console.error("[notifications] list failed", err);
-      res.status(500).json({ error: "Notifications list failed" });
+      res.status(500).json({ error: "Bildirishnomalar ro‘yxatini yuklab bo‘lmadi" });
     }
   },
 );
@@ -63,23 +92,41 @@ router.post(
   requireCompany,
   async (req: Request, res: Response) => {
     try {
-      if (!isTelegramConfigured()) {
+      if (!isTelegramBotConfigured("alerts")) {
         res.status(400).json({
-          error: "TELEGRAM_BOT_TOKEN yoki TELEGRAM_CHAT_ID sozlanmagan",
+          error: "Telegram bildirishnoma boti tokeni sozlanmagan",
         });
         return;
       }
 
-      const companyName = req.principal!.companyName ?? "Company";
+      const companyId = req.principal!.companyId!;
+      const companyName = req.principal!.companyName ?? "Kompaniya";
 
-      await sendTelegramMessage(
-        `✅ Fleet Manager Pro test xabari\n\nKompaniya: ${companyName}\nTelegram notification ishlayapti.`,
-      );
+      const link = await getCompanyTelegramLink(companyId);
 
-      res.json({ ok: true });
+      if (!link) {
+        res.status(400).json({
+          error:
+            "Telegram bildirishnoma boti ushbu kompaniyaga ulanmagan. Avval Telegram ulash kodini oling.",
+        });
+        return;
+      }
+
+      await sendTelegramMessageToChat({
+        botType: "alerts",
+        chatId: link.telegramChatId,
+        text: [
+          "✅ Fleet Docs test bildirishnomasi",
+          "",
+          `Kompaniya: ${companyName}`,
+          "Telegram bildirishnomalari muvaffaqiyatli ishlayapti.",
+        ].join("\n"),
+      });
+
+      res.json({ ok: true, sent: 1 });
     } catch (err) {
       console.error("[telegram-test] failed", err);
-      res.status(500).json({ error: "Telegram test yuborilmadi" });
+      res.status(500).json({ error: "Telegram test xabarini yuborib bo‘lmadi" });
     }
   },
 );
@@ -90,15 +137,26 @@ router.post(
   requireCompany,
   async (req: Request, res: Response) => {
     try {
-      if (!isTelegramConfigured()) {
+      if (!isTelegramBotConfigured("alerts")) {
         res.status(400).json({
-          error: "TELEGRAM_BOT_TOKEN yoki TELEGRAM_CHAT_ID sozlanmagan",
+          error: "Telegram bildirishnoma boti tokeni sozlanmagan",
         });
         return;
       }
 
       const companyId = req.principal!.companyId!;
-      const companyName = req.principal!.companyName ?? "Company";
+      const companyName = req.principal!.companyName ?? "Kompaniya";
+
+      const link = await getCompanyTelegramLink(companyId);
+
+      if (!link) {
+        res.status(400).json({
+          error:
+            "Telegram bildirishnoma boti ushbu kompaniyaga ulanmagan. Avval Telegram ulash kodini oling.",
+        });
+        return;
+      }
+
       const now = new Date();
       const horizon = new Date(now.getTime() + EXPIRING_THRESHOLD_DAYS * 86400000);
 
@@ -115,30 +173,42 @@ router.post(
         .limit(20);
 
       if (rows.length === 0) {
-        await sendTelegramMessage(
-          `✅ Fleet Manager Pro\n\nKompaniya: ${companyName}\nMuddati yaqin yoki o‘tgan hujjatlar topilmadi.`,
-        );
+        await sendTelegramMessageToChat({
+          botType: "alerts",
+          chatId: link.telegramChatId,
+          text: [
+            "✅ Fleet Docs",
+            "",
+            `Kompaniya: ${companyName}`,
+            "Muddati yaqinlashgan yoki muddati o‘tgan hujjatlar topilmadi.",
+          ].join("\n"),
+        });
 
         res.json({ ok: true, sent: 1, documents: 0 });
         return;
       }
 
       const lines = rows.map((r, index) => {
-        const s = statusFor(r.doc.endDate, now);
-        const vehicle = `${r.vehicleName ?? "Transport"} ${
-          r.vehiclePlateNumber ? `(${r.vehiclePlateNumber})` : ""
-        }`;
+        const { status, daysRemaining } = statusFor(r.doc.endDate, now);
+        const statusText =
+          status === "expired"
+            ? "Muddati o‘tgan"
+            : status === "expiring"
+              ? "Muddati yaqin"
+              : "Amalda";
 
         return [
-          `${index + 1}. ${vehicle}`,
-          `   Hujjat: ${r.doc.name}`,
-          `   Raqam: ${r.doc.number}`,
-          `   Holat: ${daysLabel(s.daysRemaining)}`,
+          `${index + 1}. ${r.doc.name}`,
+          `   Transport: ${r.vehicleName ?? "Noma’lum"}${
+            r.vehiclePlateNumber ? ` (${r.vehiclePlateNumber})` : ""
+          }`,
+          `   Tugash sanasi: ${dateLabel(r.doc.endDate)} — ${daysLabel(daysRemaining)}`,
+          `   Holat: ${statusText}`,
         ].join("\n");
       });
 
       const message = [
-        "⚠️ Fleet Manager Pro ogohlantirish",
+        "⚠️ Fleet Docs hujjat muddati bo‘yicha ogohlantirish",
         "",
         `Kompaniya: ${companyName}`,
         `Topilgan hujjatlar: ${rows.length}`,
@@ -146,7 +216,11 @@ router.post(
         ...lines,
       ].join("\n");
 
-      await sendTelegramMessage(message);
+      await sendTelegramMessageToChat({
+        botType: "alerts",
+        chatId: link.telegramChatId,
+        text: message,
+      });
 
       res.json({
         ok: true,
@@ -155,7 +229,7 @@ router.post(
       });
     } catch (err) {
       console.error("[telegram-expiry-alerts] failed", err);
-      res.status(500).json({ error: "Telegram alert yuborilmadi" });
+      res.status(500).json({ error: "Telegram ogohlantirishini yuborib bo‘lmadi" });
     }
   },
 );

@@ -1,0 +1,10 @@
+artifacts/api-server/src/routes/index.ts
+artifacts/api-server/src/routes/support.ts
+artifacts/fleet-docs/src/Router.tsx
+artifacts/fleet-docs/src/components/layout/Sidebar.tsx
+artifacts/fleet-docs/src/lib/i18n.ts
+artifacts/fleet-docs/src/lib/support-api.ts
+artifacts/fleet-docs/src/pages/AdminSupport.tsx
+artifacts/fleet-docs/src/pages/CallBot.tsx
+lib/db/src/schema/index.ts
+lib/db/src/schema/support.ts
