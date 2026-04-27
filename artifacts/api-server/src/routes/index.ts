@@ -13,7 +13,6 @@ import profileRouter from "./profile";
 
 const router: IRouter = Router();
 
-router.use(profileRouter);
 router.use(uploadsRouter);
 router.use(healthRouter);
 router.use(authRouter);
@@ -24,5 +23,6 @@ router.use(dashboardRouter);
 router.use(notificationsRouter);
 router.use(storageRouter);
 router.use(reportsRouter);
+router.use(profileRouter);
 
 export default router;

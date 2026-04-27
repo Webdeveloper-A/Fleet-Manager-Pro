@@ -8,6 +8,12 @@ export type VehicleFormState = {
   year: string;
   techPassportSeries: string;
   driverName: string;
+
+  hasTrailer: boolean;
+  trailerPlateNumber: string;
+  trailerModel: string;
+  trailerCapacityKg: string;
+  trailerNote: string;
 };
 
 export const emptyVehicle: VehicleFormState = {
@@ -17,6 +23,12 @@ export const emptyVehicle: VehicleFormState = {
   year: String(new Date().getFullYear()),
   techPassportSeries: "",
   driverName: "",
+
+  hasTrailer: false,
+  trailerPlateNumber: "",
+  trailerModel: "",
+  trailerCapacityKg: "",
+  trailerNote: "",
 };
 
 export function VehicleFormFields({
@@ -30,9 +42,20 @@ export function VehicleFormFields({
     onChange({ ...state, [key]: value });
   }
 
+  function toggleTrailer(checked: boolean) {
+    onChange({
+      ...state,
+      hasTrailer: checked,
+      trailerPlateNumber: checked ? state.trailerPlateNumber : "",
+      trailerModel: checked ? state.trailerModel : "",
+      trailerCapacityKg: checked ? state.trailerCapacityKg : "",
+      trailerNote: checked ? state.trailerNote : "",
+    });
+  }
+
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <div className="sm:col-span-2 space-y-1.5">
+      <div className="space-y-1.5 sm:col-span-2">
         <Label htmlFor="name">Vehicle name</Label>
         <Input
           id="name"
@@ -43,6 +66,7 @@ export function VehicleFormFields({
           data-testid="input-vehicle-name"
         />
       </div>
+
       <div className="space-y-1.5">
         <Label htmlFor="plate">Plate number</Label>
         <Input
@@ -54,6 +78,7 @@ export function VehicleFormFields({
           data-testid="input-vehicle-plate"
         />
       </div>
+
       <div className="space-y-1.5">
         <Label htmlFor="vin">VIN code</Label>
         <Input
@@ -65,6 +90,7 @@ export function VehicleFormFields({
           data-testid="input-vehicle-vin"
         />
       </div>
+
       <div className="space-y-1.5">
         <Label htmlFor="year">Year</Label>
         <Input
@@ -78,6 +104,7 @@ export function VehicleFormFields({
           data-testid="input-vehicle-year"
         />
       </div>
+
       <div className="space-y-1.5">
         <Label htmlFor="tech">Tech passport series</Label>
         <Input
@@ -88,7 +115,8 @@ export function VehicleFormFields({
           data-testid="input-vehicle-tech"
         />
       </div>
-      <div className="sm:col-span-2 space-y-1.5">
+
+      <div className="space-y-1.5 sm:col-span-2">
         <Label htmlFor="driver">Driver name</Label>
         <Input
           id="driver"
@@ -97,6 +125,69 @@ export function VehicleFormFields({
           placeholder="Bekzod Karimov"
           data-testid="input-vehicle-driver"
         />
+      </div>
+
+      <div className="rounded-lg border border-border/70 bg-muted/20 p-4 sm:col-span-2">
+        <label className="flex cursor-pointer items-center gap-3 text-sm font-medium">
+          <input
+            type="checkbox"
+            checked={state.hasTrailer}
+            onChange={(e) => toggleTrailer(e.target.checked)}
+            className="h-4 w-4 rounded border-border"
+            data-testid="checkbox-has-trailer"
+          />
+          Pritsepi bor
+        </label>
+
+        {state.hasTrailer ? (
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="trailerPlate">Pritsep davlat raqami</Label>
+              <Input
+                id="trailerPlate"
+                value={state.trailerPlateNumber}
+                onChange={(e) => set("trailerPlateNumber", e.target.value)}
+                placeholder="01 T 456 AB"
+                data-testid="input-trailer-plate"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="trailerModel">Pritsep modeli/turi</Label>
+              <Input
+                id="trailerModel"
+                value={state.trailerModel}
+                onChange={(e) => set("trailerModel", e.target.value)}
+                placeholder="Schmitz Cargobull"
+                data-testid="input-trailer-model"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="trailerCapacity">Yuk sig‘imi, kg</Label>
+              <Input
+                id="trailerCapacity"
+                type="number"
+                min={0}
+                value={state.trailerCapacityKg}
+                onChange={(e) => set("trailerCapacityKg", e.target.value)}
+                placeholder="24000"
+                data-testid="input-trailer-capacity"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="trailerNote">Izoh</Label>
+              <Input
+                id="trailerNote"
+                value={state.trailerNote}
+                onChange={(e) => set("trailerNote", e.target.value)}
+                placeholder="Tentli pritsep"
+                data-testid="input-trailer-note"
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

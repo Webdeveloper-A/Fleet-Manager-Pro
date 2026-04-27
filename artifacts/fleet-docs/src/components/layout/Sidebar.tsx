@@ -4,6 +4,8 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { useT, type TranslationKey } from "@/lib/i18n";
 
+type Role = "company" | "admin";
+
 const NAV = [
   { href: "/", labelKey: "dashboard", icon: Home, roles: ["company"] as const },
   { href: "/vehicles", labelKey: "vehicles", icon: Truck, roles: ["company"] as const },
@@ -19,7 +21,7 @@ const NAV = [
   href: string;
   labelKey: TranslationKey;
   icon: typeof Home;
-  roles: readonly ("company" | "admin")[];
+  roles: readonly Role[];
 }>;
 
 export function Sidebar() {
@@ -27,7 +29,7 @@ export function Sidebar() {
   const { principal } = useAuth();
   const t = useT();
 
-  const role = principal?.role ?? "company";
+  const role: Role = principal?.role === "admin" ? "admin" : "company";
   const items = NAV.filter((n) => n.roles.includes(role));
 
   return (

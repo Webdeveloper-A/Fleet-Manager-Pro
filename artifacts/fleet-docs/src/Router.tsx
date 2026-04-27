@@ -16,7 +16,13 @@ import Profile from "@/pages/Profile";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 
-function ProtectedShell({ children, adminOnly = false }: { children: ReactNode; adminOnly?: boolean }) {
+function ProtectedShell({
+  children,
+  adminOnly = false,
+}: {
+  children: ReactNode;
+  adminOnly?: boolean;
+}) {
   const [location, setLocation] = useLocation();
   const { token, principal, setAuth, logout } = useAuth();
 

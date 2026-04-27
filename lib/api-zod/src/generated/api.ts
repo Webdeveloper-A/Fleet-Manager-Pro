@@ -181,6 +181,11 @@ export const ListVehiclesResponse = zod.object({
       year: zod.number(),
       techPassportSeries: zod.string().nullish(),
       driverName: zod.string().nullish(),
+hasTrailer: zod.boolean().optional(),
+trailerPlateNumber: zod.string().nullish(),
+trailerModel: zod.string().nullish(),
+trailerCapacityKg: zod.number().nullish(),
+trailerNote: zod.string().nullish(),
       createdAt: zod.coerce.date(),
       documentCount: zod.number().optional(),
       worstStatus: zod
@@ -202,15 +207,18 @@ export const createVehicleBodyYearMin = 1900;
 export const createVehicleBodyYearMax = 2100;
 
 export const CreateVehicleBody = zod.object({
-  name: zod.string().min(1),
-  plateNumber: zod.string().min(1),
-  vinCode: zod.string().min(1),
-  year: zod
-    .number()
-    .min(createVehicleBodyYearMin)
-    .max(createVehicleBodyYearMax),
-  techPassportSeries: zod.string().optional(),
-  driverName: zod.string().optional(),
+  name: zod.string(),
+  plateNumber: zod.string(),
+  vinCode: zod.string(),
+  year: zod.coerce.number().min(createVehicleBodyYearMin).max(createVehicleBodyYearMax),
+  techPassportSeries: zod.string().nullish(),
+  driverName: zod.string().nullish(),
+
+  hasTrailer: zod.boolean().optional().default(false),
+  trailerPlateNumber: zod.string().nullish(),
+  trailerModel: zod.string().nullish(),
+  trailerCapacityKg: zod.coerce.number().int().positive().nullish(),
+  trailerNote: zod.string().nullish(),
 });
 
 /**
@@ -230,6 +238,11 @@ export const GetVehicleResponse = zod
     year: zod.number(),
     techPassportSeries: zod.string().nullish(),
     driverName: zod.string().nullish(),
+hasTrailer: zod.boolean().optional(),
+trailerPlateNumber: zod.string().nullish(),
+trailerModel: zod.string().nullish(),
+trailerCapacityKg: zod.number().nullish(),
+trailerNote: zod.string().nullish(),
     createdAt: zod.coerce.date(),
     documentCount: zod.number().optional(),
     worstStatus: zod.enum(["valid", "expiring", "expired", "none"]).optional(),
@@ -270,9 +283,15 @@ export const UpdateVehicleBody = zod.object({
   name: zod.string().optional(),
   plateNumber: zod.string().optional(),
   vinCode: zod.string().optional(),
-  year: zod.number().optional(),
-  techPassportSeries: zod.string().optional(),
-  driverName: zod.string().optional(),
+  year: zod.coerce.number().min(createVehicleBodyYearMin).max(createVehicleBodyYearMax).optional(),
+  techPassportSeries: zod.string().nullish(),
+  driverName: zod.string().nullish(),
+
+  hasTrailer: zod.boolean().optional(),
+  trailerPlateNumber: zod.string().nullish(),
+  trailerModel: zod.string().nullish(),
+  trailerCapacityKg: zod.coerce.number().int().positive().nullish(),
+  trailerNote: zod.string().nullish(),
 });
 
 export const UpdateVehicleResponse = zod.object({
@@ -284,6 +303,11 @@ export const UpdateVehicleResponse = zod.object({
   year: zod.number(),
   techPassportSeries: zod.string().nullish(),
   driverName: zod.string().nullish(),
+hasTrailer: zod.boolean().optional(),
+trailerPlateNumber: zod.string().nullish(),
+trailerModel: zod.string().nullish(),
+trailerCapacityKg: zod.number().nullish(),
+trailerNote: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   documentCount: zod.number().optional(),
   worstStatus: zod.enum(["valid", "expiring", "expired", "none"]).optional(),

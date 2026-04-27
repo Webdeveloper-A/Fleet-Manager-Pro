@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useLocation, Link } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetVehicle,
@@ -44,15 +44,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  ArrowLeft,
-  Pencil,
-  Trash2,
-  Plus,
-  Loader2,
-  Paperclip,
-  Truck,
-} from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, Plus, Loader2, Truck } from "lucide-react";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
 import { toast } from "@/hooks/use-toast";
@@ -68,6 +60,33 @@ import {
 import { useAuth } from "@/lib/auth";
 import { downloadDocumentFile } from "@/lib/download-document-file";
 
+type VehicleTrailerFields = {
+  hasTrailer?: boolean | null;
+  trailerPlateNumber?: string | null;
+  trailerModel?: string | null;
+  trailerCapacityKg?: number | null;
+  trailerNote?: string | null;
+};
+
+function toVehiclePayload(state: VehicleFormState) {
+  const hasTrailer = Boolean(state.hasTrailer);
+
+  return {
+    name: state.name,
+    plateNumber: state.plateNumber,
+    vinCode: state.vinCode,
+    year: Number(state.year),
+    techPassportSeries: state.techPassportSeries || undefined,
+    driverName: state.driverName || undefined,
+
+    hasTrailer,
+    trailerPlateNumber: hasTrailer ? state.trailerPlateNumber || undefined : undefined,
+    trailerModel: hasTrailer ? state.trailerModel || undefined : undefined,
+    trailerCapacityKg:
+      hasTrailer && state.trailerCapacityKg ? Number(state.trailerCapacityKg) : undefined,
+    trailerNote: hasTrailer ? state.trailerNote || undefined : undefined,
+  };
+}
 
 export default function VehicleDetail() {
   const token = useAuth((s) => s.token);
@@ -95,10 +114,11 @@ export default function VehicleDetail() {
   );
   const [docState, setDocState] = useState<DocumentFormState | null>(null);
   const [deleteDoc_, setDeleteDoc_] = useState<Document | null>(null);
- 
 
   useEffect(() => {
     if (data && !editState) {
+      const trailer = data as typeof data & VehicleTrailerFields;
+
       setEditState({
         name: data.name,
         plateNumber: data.plateNumber,
@@ -106,28 +126,33 @@ export default function VehicleDetail() {
         year: String(data.year),
         techPassportSeries: data.techPassportSeries ?? "",
         driverName: data.driverName ?? "",
+
+        hasTrailer: Boolean(trailer.hasTrailer),
+        trailerPlateNumber: trailer.trailerPlateNumber ?? "",
+        trailerModel: trailer.trailerModel ?? "",
+        trailerCapacityKg:
+          trailer.trailerCapacityKg !== null && trailer.trailerCapacityKg !== undefined
+            ? String(trailer.trailerCapacityKg)
+            : "",
+        trailerNote: trailer.trailerNote ?? "",
       });
     }
   }, [data, editState]);
 
   async function handleVehicleEdit() {
     if (!editState) return;
+
     try {
       await update.mutateAsync({
         id,
-        data: {
-          name: editState.name,
-          plateNumber: editState.plateNumber,
-          vinCode: editState.vinCode,
-          year: Number(editState.year),
-          techPassportSeries: editState.techPassportSeries || undefined,
-          driverName: editState.driverName || undefined,
-        },
+        data: toVehiclePayload(editState) as never,
       });
+
       await Promise.all([
         qc.invalidateQueries({ queryKey: getGetVehicleQueryKey(id) }),
         qc.invalidateQueries({ queryKey: getListVehiclesQueryKey() }),
       ]);
+
       toast({ title: "Vehicle updated" });
       setEditOpen(false);
     } catch (err) {
@@ -140,6 +165,7 @@ export default function VehicleDetail() {
     try {
       await remove.mutateAsync({ id });
       await qc.invalidateQueries({ queryKey: getListVehiclesQueryKey() });
+
       toast({ title: "Vehicle deleted" });
       setLocation("/vehicles");
     } catch (err) {
@@ -169,6 +195,7 @@ export default function VehicleDetail() {
 
   async function handleDocSave() {
     if (!docDialog || !docState) return;
+
     try {
       if (docDialog.mode === "create") {
         await createDoc.mutateAsync({
@@ -197,11 +224,13 @@ export default function VehicleDetail() {
           },
         });
       }
+
       await Promise.all([
         qc.invalidateQueries({ queryKey: getGetVehicleQueryKey(id) }),
         qc.invalidateQueries({ queryKey: getListDocumentsQueryKey() }),
         qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
       ]);
+
       toast({ title: docDialog.mode === "create" ? "Document added" : "Document updated" });
       setDocDialog(null);
       setDocState(null);
@@ -213,13 +242,16 @@ export default function VehicleDetail() {
 
   async function handleDocDelete() {
     if (!deleteDoc_) return;
+
     try {
       await deleteDoc.mutateAsync({ id: deleteDoc_.id });
+
       await Promise.all([
         qc.invalidateQueries({ queryKey: getGetVehicleQueryKey(id) }),
         qc.invalidateQueries({ queryKey: getListDocumentsQueryKey() }),
         qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
       ]);
+
       toast({ title: "Document deleted" });
       setDeleteDoc_(null);
     } catch (err) {
@@ -238,6 +270,7 @@ export default function VehicleDetail() {
     );
   }
 
+  const vehicle = data as typeof data & VehicleTrailerFields;
   const docs = data.documents ?? [];
 
   return (
@@ -258,10 +291,22 @@ export default function VehicleDetail() {
         description={`${data.plateNumber} • ${data.year}`}
         actions={
           <>
+            {vehicle.hasTrailer ? (
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
+                Pritsep bor
+              </span>
+            ) : null}
+
             <StatusPill status={(data.worstStatus ?? "none") as StatusKind} size="md" />
-            <Button variant="outline" onClick={() => setEditOpen(true)} data-testid="button-edit-vehicle">
+
+            <Button
+              variant="outline"
+              onClick={() => setEditOpen(true)}
+              data-testid="button-edit-vehicle"
+            >
               <Pencil className="mr-1 h-4 w-4" /> Edit
             </Button>
+
             <Button
               variant="outline"
               className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
@@ -285,9 +330,7 @@ export default function VehicleDetail() {
             { label: "Documents", value: String(data.documentCount ?? 0) },
             {
               label: "Next expiry",
-              value: data.nextExpiryAt
-                ? format(new Date(data.nextExpiryAt), "MMM d, yyyy")
-                : "—",
+              value: data.nextExpiryAt ? format(new Date(data.nextExpiryAt), "MMM d, yyyy") : "—",
             },
             {
               label: "Added",
@@ -312,6 +355,51 @@ export default function VehicleDetail() {
         </CardContent>
       </Card>
 
+      {vehicle.hasTrailer ? (
+        <Card className="mt-6 border-amber-200 bg-amber-50/40">
+          <CardHeader>
+            <CardTitle className="text-base font-semibold">Pritsep ma’lumotlari</CardTitle>
+          </CardHeader>
+
+          <CardContent className="grid gap-4 p-6 pt-0 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              {
+                label: "Pritsep raqami",
+                value: vehicle.trailerPlateNumber || "—",
+                mono: true,
+              },
+              {
+                label: "Model / turi",
+                value: vehicle.trailerModel || "—",
+              },
+              {
+                label: "Yuk sig‘imi",
+                value: vehicle.trailerCapacityKg ? `${vehicle.trailerCapacityKg} kg` : "—",
+              },
+              {
+                label: "Izoh",
+                value: vehicle.trailerNote || "—",
+              },
+            ].map((field) => (
+              <div key={field.label}>
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                  {field.label}
+                </p>
+                <p
+                  className={
+                    field.mono
+                      ? "mt-0.5 font-mono text-sm text-foreground"
+                      : "mt-0.5 text-sm text-foreground"
+                  }
+                >
+                  {field.value}
+                </p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card className="mt-6">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base font-semibold">Documents</CardTitle>
@@ -320,6 +408,7 @@ export default function VehicleDetail() {
             Add document
           </Button>
         </CardHeader>
+
         <CardContent className="p-0">
           {docs.length === 0 ? (
             <div className="px-6 pb-6 pt-2 text-center text-sm text-muted-foreground">
@@ -337,6 +426,7 @@ export default function VehicleDetail() {
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
+
               <TableBody>
                 {docs.map((d, i) => (
                   <motion.tr
@@ -348,30 +438,35 @@ export default function VehicleDetail() {
                     data-testid={`row-doc-${d.id}`}
                   >
                     <TableCell>
-                      <div className="flex items-center gap-2 font-medium">
-                        {d.name}
-                       {d.fileUrl ? (
-                       <button
-                        type="button"
-                        className="text-blue-600 hover:underline"
-                         onClick={() => downloadDocumentFile(d.fileUrl!, d.fileName, token)}
-                             >
-                           {d.fileName || "Faylni yuklab olish"}
-                       </button>
-                             ) : (
-                            <span className="text-muted-foreground">Fayl yo‘q</span>
-                           )}
+                      <div className="flex flex-col gap-1 font-medium">
+                        <span>{d.name}</span>
+
+                        {d.fileUrl ? (
+                          <button
+                            type="button"
+                            className="w-fit text-xs text-blue-600 hover:underline"
+                            onClick={() => downloadDocumentFile(d.fileUrl!, d.fileName, token)}
+                          >
+                            {d.fileName || "Faylni yuklab olish"}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Fayl yo‘q</span>
+                        )}
                       </div>
                     </TableCell>
+
                     <TableCell className="font-mono text-xs text-muted-foreground">
                       {d.number}
                     </TableCell>
+
                     <TableCell className="text-sm text-muted-foreground">
                       {format(new Date(d.endDate), "MMM d, yyyy")}
                     </TableCell>
+
                     <TableCell>
                       <StatusPill status={d.status} />
                     </TableCell>
+
                     <TableCell className="text-right">
                       <Button
                         size="icon"
@@ -381,6 +476,7 @@ export default function VehicleDetail() {
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
+
                       <Button
                         size="icon"
                         variant="ghost"
@@ -403,13 +499,14 @@ export default function VehicleDetail() {
           <DialogHeader>
             <DialogTitle>Edit vehicle</DialogTitle>
           </DialogHeader>
-          {editState ? (
-            <VehicleFormFields state={editState} onChange={setEditState} />
-          ) : null}
+
+          {editState ? <VehicleFormFields state={editState} onChange={setEditState} /> : null}
+
           <DialogFooter>
             <Button variant="ghost" onClick={() => setEditOpen(false)}>
               Cancel
             </Button>
+
             <Button onClick={handleVehicleEdit} disabled={update.isPending}>
               {update.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save changes"}
             </Button>
@@ -426,6 +523,7 @@ export default function VehicleDetail() {
               removed.
             </AlertDialogDescription>
           </AlertDialogHeader>
+
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
@@ -438,16 +536,22 @@ export default function VehicleDetail() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={!!docDialog} onOpenChange={(o) => !o && (setDocDialog(null), setDocState(null))}>
+      <Dialog
+        open={!!docDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDocDialog(null);
+            setDocState(null);
+          }
+        }}
+      >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>
-              {docDialog?.mode === "create" ? "Add document" : "Edit document"}
-            </DialogTitle>
+            <DialogTitle>{docDialog?.mode === "create" ? "Add document" : "Edit document"}</DialogTitle>
           </DialogHeader>
-          {docState ? (
-            <DocumentFormFields state={docState} onChange={setDocState} lockVehicle />
-          ) : null}
+
+          {docState ? <DocumentFormFields state={docState} onChange={setDocState} lockVehicle /> : null}
+
           <DialogFooter>
             <Button
               variant="ghost"
@@ -458,10 +562,8 @@ export default function VehicleDetail() {
             >
               Cancel
             </Button>
-            <Button
-              onClick={handleDocSave}
-              disabled={createDoc.isPending || updateDoc.isPending}
-            >
+
+            <Button onClick={handleDocSave} disabled={createDoc.isPending || updateDoc.isPending}>
               {createDoc.isPending || updateDoc.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -472,7 +574,12 @@ export default function VehicleDetail() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!deleteDoc_} onOpenChange={(o) => !o && setDeleteDoc_(null)}>
+      <AlertDialog
+        open={!!deleteDoc_}
+        onOpenChange={(open) => {
+          if (!open) setDeleteDoc_(null);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete document?</AlertDialogTitle>
@@ -480,9 +587,13 @@ export default function VehicleDetail() {
               {deleteDoc_?.name} will be permanently removed.
             </AlertDialogDescription>
           </AlertDialogHeader>
+
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-rose-600 hover:bg-rose-600/90" onClick={handleDocDelete}>
+            <AlertDialogAction
+              className="bg-rose-600 hover:bg-rose-600/90"
+              onClick={handleDocDelete}
+            >
               {deleteDoc.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
