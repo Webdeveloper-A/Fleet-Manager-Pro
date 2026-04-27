@@ -11,12 +11,15 @@ import VehicleForm from "@/pages/VehicleForm";
 import Documents from "@/pages/Documents";
 import DocumentForm from "@/pages/DocumentForm";
 import AdminCompanies from "@/pages/AdminCompanies";
+import CallBot from "@/pages/CallBot";
+import Profile from "@/pages/Profile";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 
 function ProtectedShell({ children, adminOnly = false }: { children: ReactNode; adminOnly?: boolean }) {
   const [location, setLocation] = useLocation();
   const { token, principal, setAuth, logout } = useAuth();
+
   const { data: me, isLoading, error } = useGetMe({
     query: {
       enabled: !!token,
@@ -48,7 +51,7 @@ function ProtectedShell({ children, adminOnly = false }: { children: ReactNode; 
 
   if (!token || isLoading || !principal) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="flex min-h-screen items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
@@ -63,9 +66,11 @@ function ProtectedShell({ children, adminOnly = false }: { children: ReactNode; 
 
 function RedirectTo({ to }: { to: string }) {
   const [, setLocation] = useLocation();
+
   useEffect(() => {
     setLocation(to);
   }, [to, setLocation]);
+
   return null;
 }
 
@@ -73,41 +78,61 @@ export default function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
+
       <Route path="/">
         <ProtectedShell>
           <Dashboard />
         </ProtectedShell>
       </Route>
+
       <Route path="/vehicles">
         <ProtectedShell>
           <Vehicles />
         </ProtectedShell>
       </Route>
+
       <Route path="/vehicles/new">
         <ProtectedShell>
           <VehicleForm />
         </ProtectedShell>
       </Route>
+
       <Route path="/vehicles/:id">
         <ProtectedShell>
           <VehicleDetail />
         </ProtectedShell>
       </Route>
+
       <Route path="/documents">
         <ProtectedShell>
           <Documents />
         </ProtectedShell>
       </Route>
+
       <Route path="/documents/new">
         <ProtectedShell>
           <DocumentForm />
         </ProtectedShell>
       </Route>
+
+      <Route path="/call-bot">
+        <ProtectedShell>
+          <CallBot />
+        </ProtectedShell>
+      </Route>
+
+      <Route path="/profile">
+        <ProtectedShell>
+          <Profile />
+        </ProtectedShell>
+      </Route>
+
       <Route path="/admin/companies">
         <ProtectedShell adminOnly>
           <AdminCompanies />
         </ProtectedShell>
       </Route>
+
       <Route component={NotFound} />
     </Switch>
   );
