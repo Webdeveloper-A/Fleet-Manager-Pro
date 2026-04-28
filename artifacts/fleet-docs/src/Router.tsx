@@ -3,6 +3,7 @@ import { Route, Switch } from "wouter";
 import AppShell from "@/components/layout/AppShell";
 import { useAuth } from "@/lib/auth";
 
+import Home from "@/pages/Home";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Vehicles from "@/pages/Vehicles";
@@ -16,7 +17,23 @@ import AdminCompanies from "@/pages/AdminCompanies";
 import TelegramSettings from "@/pages/TelegramSettings";
 import TIRCarnets from "@/pages/TIRCarnets";
 import Dazvols from "@/pages/Dazvols";
+import Ads from "@/pages/Ads";
+import Profile from "@/pages/Profile";
 import NotFound from "@/pages/not-found";
+
+function RootRoute() {
+  const { principal } = useAuth();
+
+  if (!principal) {
+    return <Home />;
+  }
+
+  return (
+    <AppShell>
+      <Dashboard />
+    </AppShell>
+  );
+}
 
 function ProtectedShell({
   children,
@@ -50,14 +67,12 @@ function ProtectedShell({
 export default function Router() {
   return (
     <Switch>
-      <Route path="/login">
-        <Login />
+      <Route path="/">
+        <RootRoute />
       </Route>
 
-      <Route path="/">
-        <ProtectedShell>
-          <Dashboard />
-        </ProtectedShell>
+      <Route path="/login">
+        <Login />
       </Route>
 
       <Route path="/vehicles">
@@ -123,6 +138,18 @@ export default function Router() {
       <Route path="/call-bot">
         <ProtectedShell>
           <CallBot />
+        </ProtectedShell>
+      </Route>
+
+      <Route path="/ads">
+        <ProtectedShell>
+          <Ads />
+        </ProtectedShell>
+      </Route>
+
+      <Route path="/profile">
+        <ProtectedShell>
+          <Profile />
         </ProtectedShell>
       </Route>
 
