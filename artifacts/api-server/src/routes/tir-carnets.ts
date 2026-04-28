@@ -10,7 +10,7 @@ const router: IRouter = Router();
 const statusSchema = z.enum(["active", "used", "expired"]);
 
 const createSchema = z.object({
-  vehicleId: z.string().uuid(),
+  vehicleId: z.string().uuid().optional().nullable(),
   carnetNumber: z.string().trim().min(1).max(128),
   route: z.string().trim().max(255).optional(),
   issueDate: z.string().optional().nullable(),
@@ -160,12 +160,14 @@ router.post("/tir-carnets", requireAuth, requireCompany, async (req: Request, re
     }
 
     const companyId = req.principal!.companyId!;
-    const vehicleOk = await assertVehicleBelongsToCompany(parsed.data.vehicleId, companyId);
+  if (parsed.data.vehicleId) {
+  const vehicleOk = await assertVehicleBelongsToCompany(parsed.data.vehicleId, companyId);
 
-    if (!vehicleOk) {
-      res.status(400).json({ error: "Transport topilmadi yoki kompaniyaga tegishli emas" });
-      return;
-    }
+  if (!vehicleOk) {
+    res.status(400).json({ error: "Transport topilmadi yoki kompaniyaga tegishli emas" });
+    return;
+  }
+}
 
     const now = new Date();
 
@@ -173,7 +175,7 @@ router.post("/tir-carnets", requireAuth, requireCompany, async (req: Request, re
       .insert(tirCarnetsTable)
       .values({
         companyId,
-        vehicleId: parsed.data.vehicleId,
+        vehicleId: parsed.data.vehicleId || null,
         carnetNumber: parsed.data.carnetNumber,
         route: parsed.data.route || null,
         issueDate: parseDate(parsed.data.issueDate),
@@ -216,7 +218,7 @@ router.patch("/tir-carnets/:id", requireAuth, requireCompany, async (req: Reques
       updatedAt: new Date(),
     };
 
-    if (parsed.data.vehicleId !== undefined) updateData.vehicleId = parsed.data.vehicleId;
+    if (parsed.data.vehicleId !== undefined) updateData.vehicleId = parsed.data.vehicleId || null;
     if (parsed.data.carnetNumber !== undefined) updateData.carnetNumber = parsed.data.carnetNumber;
     if (parsed.data.route !== undefined) updateData.route = parsed.data.route || null;
     if (parsed.data.issueDate !== undefined) updateData.issueDate = parseDate(parsed.data.issueDate);

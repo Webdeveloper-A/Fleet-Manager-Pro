@@ -4,7 +4,7 @@ export type DazvolPermitType = "bilateral" | "transit" | "third_country" | "spec
 export type Dazvol = {
   id: string;
   companyId: string;
-  vehicleId: string;
+  vehicleId?: string | null;
   vehicleName?: string | null;
   vehiclePlateNumber?: string | null;
   permitNumber: string;
@@ -19,7 +19,7 @@ export type Dazvol = {
 };
 
 export type DazvolPayload = {
-  vehicleId: string;
+  vehicleId?: string | null;
   permitNumber: string;
   country: string;
   permitType: DazvolPermitType;
@@ -105,5 +105,12 @@ export function updateDazvol(token: string | null, id: string, data: Partial<Daz
 export function deleteDazvol(token: string | null, id: string) {
   return apiRequest<{ ok: boolean }>(`/api/dazvols/${id}`, token, {
     method: "DELETE",
+  });
+}
+
+export function assignDazvolToVehicle(token: string | null, id: string, vehicleId: string) {
+  return apiRequest<{ item: Dazvol }>(`/api/dazvols/${id}/assign-vehicle`, token, {
+    method: "POST",
+    body: JSON.stringify({ vehicleId }),
   });
 }

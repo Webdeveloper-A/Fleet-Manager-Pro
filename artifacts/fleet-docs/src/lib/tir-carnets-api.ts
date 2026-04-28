@@ -3,7 +3,7 @@ export type TirCarnetStatus = "active" | "used" | "expired";
 export type TirCarnet = {
   id: string;
   companyId: string;
-  vehicleId: string;
+  vehicleId?: string | null;
   vehicleName?: string | null;
   vehiclePlateNumber?: string | null;
   carnetNumber: string;
@@ -17,7 +17,7 @@ export type TirCarnet = {
 };
 
 export type TirCarnetPayload = {
-  vehicleId: string;
+  vehicleId?: string | null;
   carnetNumber: string;
   route?: string | null;
   issueDate?: string | null;

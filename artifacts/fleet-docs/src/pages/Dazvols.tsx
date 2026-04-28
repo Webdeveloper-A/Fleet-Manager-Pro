@@ -10,6 +10,7 @@ import {
   MoreHorizontal,
   Loader2,
   Pencil,
+LinkIcon,
 } from "lucide-react";
 import {
   useListVehicles,
@@ -71,6 +72,7 @@ import {
   type DazvolPayload,
   type DazvolPermitType,
   type DazvolStatus,
+assignDazvolToVehicle,
 } from "@/lib/dazvols-api";
 
 const PAGE_SIZE = 15;
@@ -165,6 +167,8 @@ export default function Dazvols() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Dazvol | null>(null);
   const [deleting, setDeleting] = useState<Dazvol | null>(null);
+const [assigning, setAssigning] = useState<Dazvol | null>(null);
+const [assignVehicleId, setAssignVehicleId] = useState("");
   const [form, setForm] = useState<FormState>(() => emptyForm());
 
   useEffect(() => {
@@ -235,6 +239,21 @@ export default function Dazvols() {
     },
   });
 
+const assignMutation = useMutation({
+  mutationFn: ({ id, vehicleId }: { id: string; vehicleId: string }) =>
+    assignDazvolToVehicle(token, id, vehicleId),
+  onSuccess: async () => {
+    await qc.invalidateQueries({ queryKey: ["dazvols"] });
+    toast({ title: "Dazvol transportga biriktirildi" });
+    setAssigning(null);
+    setAssignVehicleId("");
+  },
+  onError: (err) => {
+    const message = err instanceof Error ? err.message : "Dazvolni biriktirib bo‘lmadi";
+    toast({ title: "Xatolik", description: message, variant: "destructive" });
+  },
+});
+
   function openCreate() {
     const preferredVehicleId =
       vehicleId !== "all" ? vehicleId : vehicles.length > 0 ? vehicles[0].id : "";
@@ -268,14 +287,7 @@ export default function Dazvols() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!form.vehicleId) {
-      toast({
-        title: "Transport tanlanmagan",
-        description: "Dazvol transportga bog‘lanishi kerak.",
-        variant: "destructive",
-      });
-      return;
-    }
+
 
     if (!form.permitNumber.trim() || !form.country.trim()) {
       toast({
@@ -423,7 +435,15 @@ export default function Dazvols() {
                               <Pencil className="mr-2 h-4 w-4" />
                               Tahrirlash
                             </DropdownMenuItem>
-
+<DropdownMenuItem
+  onClick={() => {
+    setAssigning(item);
+    setAssignVehicleId(item.vehicleId ?? "");
+  }}
+>
+  <LinkIcon className="mr-2 h-4 w-4" />
+  Transportga biriktirish
+</DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-rose-600 focus:text-rose-600"
                               onClick={() => setDeleting(item)}
@@ -611,6 +631,56 @@ export default function Dazvols() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+<Dialog open={!!assigning} onOpenChange={(open) => !open && setAssigning(null)}>
+  <DialogContent className="max-w-lg">
+    <DialogHeader>
+      <DialogTitle>Dazvolni transportga biriktirish</DialogTitle>
+    </DialogHeader>
+
+    <div className="space-y-4">
+      <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+        <p className="font-medium">{assigning?.permitNumber}</p>
+        <p className="text-muted-foreground">
+          {assigning?.country} — {assigning ? permitTypeLabel(assigning.permitType) : ""}
+        </p>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium text-muted-foreground">
+          Transport tanlang
+        </label>
+        <select
+          value={assignVehicleId}
+          onChange={(e) => setAssignVehicleId(e.target.value)}
+          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+        >
+          <option value="">Transport tanlang</option>
+          {vehicles.map((vehicle) => (
+            <option key={vehicle.id} value={vehicle.id}>
+              {vehicle.name} {vehicle.plateNumber ? `— ${vehicle.plateNumber}` : ""}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+
+    <DialogFooter>
+      <Button variant="ghost" onClick={() => setAssigning(null)}>
+        Bekor qilish
+      </Button>
+
+      <Button
+        disabled={!assignVehicleId || assignMutation.isPending}
+        onClick={() => {
+          if (!assigning || !assignVehicleId) return;
+          assignMutation.mutate({ id: assigning.id, vehicleId: assignVehicleId });
+        }}
+      >
+        {assignMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Biriktirish"}
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
     </div>
   );
 }

@@ -1,8 +1,6 @@
 import { pgTable, varchar, uuid, timestamp, text, index } from "drizzle-orm/pg-core";
 import { companiesTable } from "./users";
 import { vehiclesTable } from "./vehicles";
-import { companiesTable } from "./users";
-import { vehiclesTable } from "./vehicles";
 
 export const tirCarnetsTable = pgTable(
   "tir_carnets",
@@ -13,9 +11,9 @@ export const tirCarnetsTable = pgTable(
       .notNull()
       .references(() => companiesTable.id, { onDelete: "cascade" }),
 
-    vehicleId: uuid("vehicle_id")
-      .notNull()
-      .references(() => vehiclesTable.id, { onDelete: "cascade" }),
+    vehicleId: uuid("vehicle_id").references(() => vehiclesTable.id, {
+      onDelete: "set null",
+    }),
 
     carnetNumber: varchar("carnet_number", { length: 128 }).notNull(),
     route: varchar("route", { length: 255 }),

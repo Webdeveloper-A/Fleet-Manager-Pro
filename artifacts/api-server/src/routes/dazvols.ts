@@ -11,7 +11,7 @@ const statusSchema = z.enum(["active", "used", "expired"]);
 const permitTypeSchema = z.enum(["bilateral", "transit", "third_country", "special"]);
 
 const createSchema = z.object({
-  vehicleId: z.string().uuid(),
+  vehicleId: z.string().uuid().optional().nullable(),
   permitNumber: z.string().trim().min(1).max(128),
   country: z.string().trim().min(1).max(128),
   permitType: permitTypeSchema.optional().default("bilateral"),
@@ -166,20 +166,21 @@ router.post("/dazvols", requireAuth, requireCompany, async (req: Request, res: R
     }
 
     const companyId = req.principal!.companyId!;
-    const vehicleOk = await assertVehicleBelongsToCompany(parsed.data.vehicleId, companyId);
+    if (parsed.data.vehicleId) {
+  const vehicleOk = await assertVehicleBelongsToCompany(parsed.data.vehicleId, companyId);
 
-    if (!vehicleOk) {
-      res.status(400).json({ error: "Transport topilmadi yoki kompaniyaga tegishli emas" });
-      return;
-    }
-
+  if (!vehicleOk) {
+    res.status(400).json({ error: "Transport topilmadi yoki kompaniyaga tegishli emas" });
+    return;
+  }
+}
     const now = new Date();
 
     const [created] = await db
       .insert(dazvolsTable)
       .values({
         companyId,
-        vehicleId: parsed.data.vehicleId,
+        vehicleId: parsed.data.vehicleId || null,
         permitNumber: parsed.data.permitNumber,
         country: parsed.data.country,
         permitType: parsed.data.permitType,
@@ -223,7 +224,7 @@ router.patch("/dazvols/:id", requireAuth, requireCompany, async (req: Request, r
       updatedAt: new Date(),
     };
 
-    if (parsed.data.vehicleId !== undefined) updateData.vehicleId = parsed.data.vehicleId;
+    if (parsed.data.vehicleId !== undefined) updateData.vehicleId = parsed.data.vehicleId || null;
     if (parsed.data.permitNumber !== undefined) updateData.permitNumber = parsed.data.permitNumber;
     if (parsed.data.country !== undefined) updateData.country = parsed.data.country;
     if (parsed.data.permitType !== undefined) updateData.permitType = parsed.data.permitType;
@@ -249,6 +250,54 @@ router.patch("/dazvols/:id", requireAuth, requireCompany, async (req: Request, r
     res.status(500).json({ error: "Dazvol yangilab bo‘lmadi" });
   }
 });
+
+const assignVehicleSchema = z.object({
+  vehicleId: z.string().uuid(),
+});
+
+router.post(
+  "/dazvols/:id/assign-vehicle",
+  requireAuth,
+  requireCompany,
+  async (req: Request, res: Response) => {
+    try {
+      const parsed = assignVehicleSchema.safeParse(req.body);
+
+      if (!parsed.success) {
+        res.status(400).json({ error: "Transport noto‘g‘ri tanlangan" });
+        return;
+      }
+
+      const companyId = req.principal!.companyId!;
+
+      const vehicleOk = await assertVehicleBelongsToCompany(parsed.data.vehicleId, companyId);
+
+      if (!vehicleOk) {
+        res.status(400).json({ error: "Transport topilmadi yoki kompaniyaga tegishli emas" });
+        return;
+      }
+
+      const [updated] = await db
+        .update(dazvolsTable)
+        .set({
+          vehicleId: parsed.data.vehicleId,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(dazvolsTable.id, req.params.id), eq(dazvolsTable.companyId, companyId)))
+        .returning();
+
+      if (!updated) {
+        res.status(404).json({ error: "Dazvol topilmadi" });
+        return;
+      }
+
+      res.json({ item: updated });
+    } catch (err) {
+      console.error("[dazvols] assign vehicle failed", err);
+      res.status(500).json({ error: "Dazvolni transportga biriktirib bo‘lmadi" });
+    }
+  },
+);
 
 router.delete("/dazvols/:id", requireAuth, requireCompany, async (req: Request, res: Response) => {
   try {

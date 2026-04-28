@@ -256,14 +256,7 @@ export default function TIRCarnets() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!form.vehicleId) {
-      toast({
-        title: "Transport tanlanmagan",
-        description: "TIR Carnet transportga bog‘lanishi kerak.",
-        variant: "destructive",
-      });
-      return;
-    }
+
 
     if (!form.carnetNumber.trim()) {
       toast({
