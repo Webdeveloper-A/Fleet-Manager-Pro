@@ -7,10 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth";
 import {
   dateLabel,
-  downloadCsv,
-  isExpired,
-  isExpiringSoon,
-  loadOperationsData,
+downloadCsv,
+getDocumentExpiry,
+isExpired,
+isExpiringSoon,
+loadOperationsData,
 } from "@/lib/operations-api";
 
 function ReportCard({
@@ -59,7 +60,7 @@ export default function Reports() {
     const dazvols = data?.dazvols ?? [];
 
     const expiryItems = [
-      ...documents.map((item) => item.expiryDate),
+     ...documents.map((item) => getDocumentExpiry(item)),
       ...tir.map((item) => item.expiryDate),
       ...dazvols.map((item) => item.expiryDate),
     ];
@@ -97,7 +98,7 @@ export default function Reports() {
         "TIR raqami": item.carnetNumber,
         "Yo‘nalish": item.route,
         Transport: item.vehicleName || item.vehiclePlateNumber || "Biriktirilmagan",
-        "Amal muddati": dateLabel(item.expiryDate),
+        "Amal muddati": dateLabel(getDocumentExpiry(item)),
         Status: item.status,
       })),
     );

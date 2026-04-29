@@ -15,6 +15,7 @@ export type DocumentItem = {
   type?: string | null;
   status?: string | null;
   expiryDate?: string | null;
+  endDate?: string | null;
   vehicleName?: string | null;
   vehiclePlateNumber?: string | null;
   createdAt?: string | null;
@@ -83,7 +84,11 @@ function normalizeList<T>(data: unknown): T[] {
   if (Array.isArray(data)) return data as T[];
 
   if (data && typeof data === "object") {
-    const obj = data as { items?: unknown; data?: unknown; results?: unknown };
+    const obj = data as {
+      items?: unknown;
+      data?: unknown;
+      results?: unknown;
+    };
 
     if (Array.isArray(obj.items)) return obj.items as T[];
     if (Array.isArray(obj.data)) return obj.data as T[];
@@ -93,17 +98,22 @@ function normalizeList<T>(data: unknown): T[] {
   return [];
 }
 
-async function list<T>(path: string, token: string | null): Promise<T[]> {
-  const data = await apiRequest<unknown>(path, token);
-  return normalizeList<T>(data);
+async function safeList<T>(path: string, token: string | null): Promise<T[]> {
+  try {
+    const data = await apiRequest<unknown>(path, token);
+    return normalizeList<T>(data);
+  } catch (err) {
+    console.warn(`[operations-api] ${path} yuklanmadi`, err);
+    return [];
+  }
 }
 
 export async function loadOperationsData(token: string | null): Promise<OperationsData> {
   const [vehicles, documents, tirCarnets, dazvols] = await Promise.all([
-    list<VehicleItem>("/api/vehicles?pageSize=500", token),
-    list<DocumentItem>("/api/documents?pageSize=500", token),
-    list<TirCarnetItem>("/api/tir-carnets?pageSize=500", token),
-    list<DazvolItem>("/api/dazvols?pageSize=500", token),
+    safeList<VehicleItem>("/api/vehicles?page=1&pageSize=100", token),
+    safeList<DocumentItem>("/api/documents?page=1&pageSize=100", token),
+    safeList<TirCarnetItem>("/api/tir-carnets?page=1&pageSize=100", token),
+    safeList<DazvolItem>("/api/dazvols?page=1&pageSize=100", token),
   ]);
 
   return {
@@ -112,6 +122,10 @@ export async function loadOperationsData(token: string | null): Promise<Operatio
     tirCarnets,
     dazvols,
   };
+}
+
+export function getDocumentExpiry(item: DocumentItem) {
+  return item.expiryDate ?? item.endDate ?? null;
 }
 
 export function daysLeft(value?: string | null) {
@@ -169,6 +183,22 @@ export function expiryClass(value?: string | null) {
 }
 
 export function downloadCsv(filename: string, rows: Array<Record<string, unknown>>) {
+  if (rows.length === 0) {
+    const blob = new Blob(["Ma’lumot mavjud emas"], {
+      type: "text/plain;charset=utf-8;",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+
+    a.href = url;
+    a.download = filename.replace(/\.csv$/i, ".txt");
+    a.click();
+
+    URL.revokeObjectURL(url);
+    return;
+  }
+
   const headers = Array.from(new Set(rows.flatMap((row) => Object.keys(row))));
 
   const escape = (value: unknown) => {
@@ -177,7 +207,7 @@ export function downloadCsv(filename: string, rows: Array<Record<string, unknown
   };
 
   const csv = [
-    headers.join(","),
+    headers.map(escape).join(","),
     ...rows.map((row) => headers.map((header) => escape(row[header])).join(",")),
   ].join("\n");
 

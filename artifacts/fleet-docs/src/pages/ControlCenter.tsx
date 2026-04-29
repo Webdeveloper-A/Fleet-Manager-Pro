@@ -13,11 +13,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth";
 import {
   dateLabel,
-  expiryClass,
-  expiryText,
-  isExpired,
-  isExpiringSoon,
-  loadOperationsData,
+expiryClass,
+expiryText,
+getDocumentExpiry,
+isExpired,
+isExpiringSoon,
+loadOperationsData,
 } from "@/lib/operations-api";
 
 function StatCard({
@@ -69,7 +70,7 @@ export default function ControlCenter() {
         type: "Hujjat",
         title: item.title || item.name || item.documentType || item.type || "Hujjat",
         transport: item.vehicleName || item.vehiclePlateNumber || "Transport ko‘rsatilmagan",
-        expiryDate: item.expiryDate,
+       expiryDate: getDocumentExpiry(item),
       })),
       ...tir.map((item) => ({
         type: "TIR Carnet",
