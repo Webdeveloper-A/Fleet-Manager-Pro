@@ -1,369 +1,484 @@
-import { Link } from "wouter";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
-  useGetDashboardSummary,
-  getGetDashboardSummaryQueryKey,
-  useListNotifications,
-  getListNotificationsQueryKey,
-  type Document,
-} from "@workspace/api-client-react";
-import { PageHeader } from "@/components/PageHeader";
-import { StatusPill } from "@/components/StatusPill";
-import { EmptyState } from "@/components/EmptyState";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
-import {
-  Truck,
-  FileText,
-  ShieldCheck,
-  Clock,
   AlertTriangle,
+  Bell,
   CalendarClock,
-  BellRing,
-  Inbox,
-  Send,
+  CheckCircle2,
+  FileText,
+  Loader2,
   MessageCircle,
+  Send,
+  ShieldCheck,
+  Truck,
+  type LucideIcon,
 } from "lucide-react";
-import { motion } from "framer-motion";
-import { format } from "date-fns";
-import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { useToast } from "@/hooks/use-toast";
-import { sendExpiryAlerts, sendTelegramTest } from "@/lib/telegram-alerts";
+import { useT, type TranslationKey } from "@/lib/i18n";
+import {
+  dateLabel,
+  daysLeft,
+  getDocumentExpiry,
+  loadOperationsData,
+  type DazvolItem,
+  type DocumentItem,
+  type TirCarnetItem,
+} from "@/lib/operations-api";
+
+type ExpiryItem = {
+  id: string;
+  typeKey: TranslationKey;
+  title: string;
+  transport: string;
+  expiryDate: string | null;
+};
+
+type DashboardAction = "telegram-test" | "expiry-alerts";
+
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  tone,
+}: {
+  label: string;
+  value: number;
+  icon: LucideIcon;
+  tone: "blue" | "green" | "amber" | "red";
+}) {
+  const toneClass = {
+    blue: "bg-sky-500/10 text-sky-400",
+    green: "bg-emerald-500/10 text-emerald-400",
+    amber: "bg-amber-500/10 text-amber-400",
+    red: "bg-rose-500/10 text-rose-400",
+  }[tone];
+
+  return (
+    <Card>
+      <CardContent className="flex items-center justify-between p-5">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {label}
+          </p>
+          <p className="mt-3 text-3xl font-bold">{value}</p>
+        </div>
+
+        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${toneClass}`}>
+          <Icon className="h-5 w-5" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function itemTitle(item: DocumentItem) {
+  return item.title || item.name || item.documentType || item.type || "Hujjat";
+}
+
+function itemTransport(item: {
+  vehicleName?: string | null;
+  vehiclePlateNumber?: string | null;
+}) {
+  if (item.vehicleName && item.vehiclePlateNumber) {
+    return `${item.vehicleName} • ${item.vehiclePlateNumber}`;
+  }
+
+  return item.vehicleName || item.vehiclePlateNumber || "—";
+}
+
+function documentToExpiryItem(item: DocumentItem): ExpiryItem {
+  return {
+    id: `document-${item.id}`,
+    typeKey: "dashboardTypeDocument",
+    title: itemTitle(item),
+    transport: itemTransport(item),
+    expiryDate: getDocumentExpiry(item),
+  };
+}
+
+function tirToExpiryItem(item: TirCarnetItem): ExpiryItem {
+  return {
+    id: `tir-${item.id}`,
+    typeKey: "dashboardTypeTir",
+    title: item.carnetNumber,
+    transport: itemTransport(item),
+    expiryDate: item.expiryDate ?? null,
+  };
+}
+
+function dazvolToExpiryItem(item: DazvolItem): ExpiryItem {
+  return {
+    id: `dazvol-${item.id}`,
+    typeKey: "dashboardTypeDazvol",
+    title: item.permitNumber,
+    transport: itemTransport(item),
+    expiryDate: item.expiryDate ?? null,
+  };
+}
+
+function expiryBadgeClass(expiryDate?: string | null) {
+  const days = daysLeft(expiryDate);
+
+  if (days === null) return "bg-slate-100 text-slate-700";
+  if (days < 0) return "bg-rose-100 text-rose-700";
+  if (days <= 7) return "bg-orange-100 text-orange-700";
+  if (days <= 30) return "bg-amber-100 text-amber-700";
+
+  return "bg-emerald-100 text-emerald-700";
+}
+
+function expiryText(expiryDate: string | null, t: (key: TranslationKey) => string) {
+  const days = daysLeft(expiryDate);
+
+  if (days === null) return t("dashboardNoExpiryDate");
+  if (days < 0) return `${Math.abs(days)} ${t("dashboardDaysExpired")}`;
+  if (days === 0) return t("dashboardExpiresToday");
+
+  return `${days} ${t("dashboardDaysLeft")}`;
+}
+
+async function postDashboardAction(path: string, token: string | null) {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!res.ok) {
+    let message = `Request failed with ${res.status}`;
+
+    try {
+      const body = (await res.json()) as { error?: string };
+      if (body.error) message = body.error;
+    } catch {
+      // ignore
+    }
+
+    throw new Error(message);
+  }
+}
 
 export default function Dashboard() {
   const token = useAuth((s) => s.token);
-  const { toast } = useToast();
-  const [sendingTelegram, setSendingTelegram] = useState(false);
+  const t = useT();
+  const [busyAction, setBusyAction] = useState<DashboardAction | null>(null);
 
-  const { data: summary, isLoading } = useGetDashboardSummary({
-    query: { queryKey: getGetDashboardSummaryQueryKey() },
+  const query = useQuery({
+    queryKey: ["dashboard-overview"],
+    queryFn: () => loadOperationsData(token),
+    enabled: !!token,
   });
 
-  const { data: notifData } = useListNotifications({
-    query: { queryKey: getListNotificationsQueryKey() },
-  });
+  const dashboard = useMemo(() => {
+    const vehicles = query.data?.vehicles ?? [];
+    const documents = query.data?.documents ?? [];
+    const tirCarnets = query.data?.tirCarnets ?? [];
+    const dazvols = query.data?.dazvols ?? [];
+
+    const expiryItems: ExpiryItem[] = [
+      ...documents.map(documentToExpiryItem),
+      ...tirCarnets.map(tirToExpiryItem),
+      ...dazvols.map(dazvolToExpiryItem),
+    ];
+
+    const valid = expiryItems.filter((item) => {
+      const days = daysLeft(item.expiryDate);
+      return days !== null && days > 15;
+    });
+
+    const expiring = expiryItems
+      .filter((item) => {
+        const days = daysLeft(item.expiryDate);
+        return days !== null && days >= 0 && days <= 15;
+      })
+      .sort((a, b) => (daysLeft(a.expiryDate) ?? 9999) - (daysLeft(b.expiryDate) ?? 9999));
+
+    const expired = expiryItems
+      .filter((item) => {
+        const days = daysLeft(item.expiryDate);
+        return days !== null && days < 0;
+      })
+      .sort((a, b) => (daysLeft(b.expiryDate) ?? -9999) - (daysLeft(a.expiryDate) ?? -9999));
+
+    const unassignedTir = tirCarnets.filter((item) => !item.vehicleId);
+    const unassignedDazvols = dazvols.filter((item) => !item.vehicleId);
+
+    return {
+      vehiclesCount: vehicles.length,
+      documentsCount: documents.length,
+      validCount: valid.length,
+      expiringCount: expiring.length,
+      expiredCount: expired.length,
+      expiring,
+      expired,
+      unassignedTir,
+      unassignedDazvols,
+    };
+  }, [query.data]);
 
   async function handleTelegramTest() {
-    setSendingTelegram(true);
-
     try {
-      await sendTelegramTest(token);
-
-      toast({
-        title: "Telegram test yuborildi",
-        description: "Botga test xabar muvaffaqiyatli yuborildi.",
-      });
+      setBusyAction("telegram-test");
+      await postDashboardAction("/api/notifications/send-telegram-test", token);
+      toast({ title: t("dashboardTelegramTestSuccess") });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Telegram test xatoligi";
-
+      const message = err instanceof Error ? err.message : t("dashboardTelegramTestFailed");
       toast({
-        title: "Telegram xatolik",
+        title: t("dashboardActionError"),
         description: message,
         variant: "destructive",
       });
     } finally {
-      setSendingTelegram(false);
+      setBusyAction(null);
     }
   }
 
-  async function handleExpiryAlerts() {
-    setSendingTelegram(true);
-
+  async function handleSendExpiryAlerts() {
     try {
-      const result = await sendExpiryAlerts(token);
-
-      toast({
-        title: "Telegram alert yuborildi",
-        description: `${result.documents ?? 0} ta hujjat bo‘yicha xabar yuborildi.`,
-      });
+      setBusyAction("expiry-alerts");
+      await postDashboardAction("/api/notifications/send-expiry-alerts", token);
+      toast({ title: t("dashboardExpiryAlertsSuccess") });
+      await query.refetch();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Telegram alert xatoligi";
-
+      const message = err instanceof Error ? err.message : t("dashboardExpiryAlertsFailed");
       toast({
-        title: "Telegram xatolik",
+        title: t("dashboardActionError"),
         description: message,
         variant: "destructive",
       });
     } finally {
-      setSendingTelegram(false);
+      setBusyAction(null);
     }
+  }
+
+  if (query.isLoading) {
+    return (
+      <div className="flex min-h-[300px] items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (query.isError) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-red-700">
+        {t("dashboardLoadError")}
+      </div>
+    );
   }
 
   return (
-    <div>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <PageHeader
-          title="Operations overview"
-          description="A quick look at fleet health, expiring documents, and active alerts."
-        />
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{t("dashboardOverviewTitle")}</h1>
+          <p className="mt-2 text-muted-foreground">{t("dashboardOverviewDescription")}</p>
+        </div>
 
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={handleTelegramTest}
-            disabled={sendingTelegram}
-            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-            data-testid="button-telegram-test"
-          >
-            <MessageCircle className="h-4 w-4" />
-            Telegram Test
-          </button>
+          <Button variant="outline" onClick={handleTelegramTest} disabled={busyAction !== null}>
+            {busyAction === "telegram-test" ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <MessageCircle className="mr-2 h-4 w-4" />
+            )}
+            {t("dashboardTelegramTest")}
+          </Button>
 
-          <button
-            type="button"
-            onClick={handleExpiryAlerts}
-            disabled={sendingTelegram}
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-            data-testid="button-send-expiry-alerts"
-          >
-            <Send className="h-4 w-4" />
-            Send Expiry Alerts
-          </button>
+          <Button onClick={handleSendExpiryAlerts} disabled={busyAction !== null}>
+            {busyAction === "expiry-alerts" ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="mr-2 h-4 w-4" />
+            )}
+            {t("dashboardSendExpiryAlerts")}
+          </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
-        {[
-          {
-            label: "Vehicles",
-            value: summary?.totalVehicles,
-            Icon: Truck,
-            tone: "primary",
-          },
-          {
-            label: "Documents",
-            value: summary?.totalDocuments,
-            Icon: FileText,
-            tone: "primary",
-          },
-          {
-            label: "Valid",
-            value: summary?.validCount,
-            Icon: ShieldCheck,
-            tone: "emerald",
-          },
-          {
-            label: "Expiring",
-            value: summary?.expiringCount,
-            Icon: Clock,
-            tone: "amber",
-          },
-          {
-            label: "Expired",
-            value: summary?.expiredCount,
-            Icon: AlertTriangle,
-            tone: "rose",
-          },
-        ].map((kpi, i) => (
-          <motion.div
-            key={kpi.label}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.04, duration: 0.3 }}
-          >
-            <Card className="overflow-hidden">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    {kpi.label}
-                  </p>
-                  <div
-                    className={
-                      kpi.tone === "emerald"
-                        ? "rounded-md bg-emerald-500/10 p-1.5 text-emerald-600 dark:text-emerald-400"
-                        : kpi.tone === "amber"
-                          ? "rounded-md bg-amber-500/10 p-1.5 text-amber-600 dark:text-amber-400"
-                          : kpi.tone === "rose"
-                            ? "rounded-md bg-rose-500/10 p-1.5 text-rose-600"
-                            : "rounded-md bg-primary/10 p-1.5 text-primary"
-                    }
-                  >
-                    <kpi.Icon className="h-4 w-4" />
-                  </div>
-                </div>
-                <div className="mt-2 flex items-baseline gap-1.5">
-                  {isLoading ? (
-                    <Skeleton className="h-8 w-12" />
-                  ) : (
-                    <p
-                      className="text-2xl font-semibold tracking-tight"
-                      data-testid={`text-kpi-${kpi.label.toLowerCase()}`}
-                    >
-                      {kpi.value ?? 0}
-                    </p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <StatCard
+          label={t("dashboardVehicles")}
+          value={dashboard.vehiclesCount}
+          icon={Truck}
+          tone="blue"
+        />
+        <StatCard
+          label={t("dashboardDocuments")}
+          value={dashboard.documentsCount}
+          icon={FileText}
+          tone="blue"
+        />
+        <StatCard
+          label={t("dashboardValid")}
+          value={dashboard.validCount}
+          icon={ShieldCheck}
+          tone="green"
+        />
+        <StatCard
+          label={t("dashboardExpiring")}
+          value={dashboard.expiringCount}
+          icon={CalendarClock}
+          tone="amber"
+        />
+        <StatCard
+          label={t("dashboardExpired")}
+          value={dashboard.expiredCount}
+          icon={AlertTriangle}
+          tone="red"
+        />
       </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-2">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <div>
-              <CardTitle className="text-base font-semibold">Upcoming expirations</CardTitle>
-              <p className="text-xs text-muted-foreground">Next 15 days</p>
-            </div>
-            <CalendarClock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="p-0">
-            {isLoading ? (
-              <DocListSkeleton />
-            ) : !summary || summary.upcomingExpirations.length === 0 ? (
-              <div className="px-6 pb-6">
-                <EmptyState
-                  icon={ShieldCheck}
-                  title="All clear"
-                  description="No documents expire in the next 15 days."
-                />
+          <CardHeader>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle className="text-base">{t("dashboardUpcomingExpirations")}</CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {t("dashboardNext15Days")}
+                </p>
               </div>
+              <CalendarClock className="h-5 w-5 text-muted-foreground" />
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-0">
+            {dashboard.expiring.length === 0 ? (
+              <p className="px-6 pb-6 text-sm text-muted-foreground">
+                {t("dashboardNoUpcomingExpirations")}
+              </p>
             ) : (
-              <DocList docs={summary.upcomingExpirations} />
+              <div className="divide-y">
+                {dashboard.expiring.slice(0, 8).map((item) => (
+                  <div key={item.id} className="flex items-start justify-between gap-3 px-6 py-4">
+                    <div className="min-w-0">
+                      <p className="font-medium">{item.title}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {t(item.typeKey)} · {item.transport}
+                      </p>
+                    </div>
+
+                    <div className="shrink-0 text-right">
+                      <span
+                        className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${expiryBadgeClass(
+                          item.expiryDate,
+                        )}`}
+                      >
+                        {expiryText(item.expiryDate, t)}
+                      </span>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {dateLabel(item.expiryDate)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+          <CardHeader>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle className="text-base">{t("dashboardRecentlyExpired")}</CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {t("dashboardExpiredDescription")}
+                </p>
+              </div>
+              <AlertTriangle className="h-5 w-5 text-rose-500" />
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-0">
+            {dashboard.expired.length === 0 ? (
+              <p className="px-6 pb-6 text-sm text-muted-foreground">
+                {t("dashboardNoExpiredItems")}
+              </p>
+            ) : (
+              <div className="divide-y">
+                {dashboard.expired.slice(0, 8).map((item) => (
+                  <div key={item.id} className="flex items-start justify-between gap-3 px-6 py-4">
+                    <div className="min-w-0">
+                      <p className="font-medium">{item.title}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {t(item.typeKey)} · {item.transport}
+                      </p>
+                    </div>
+
+                    <div className="shrink-0 text-right">
+                      <span
+                        className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${expiryBadgeClass(
+                          item.expiryDate,
+                        )}`}
+                      >
+                        {expiryText(item.expiryDate, t)}
+                      </span>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {dateLabel(item.expiryDate)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <CardTitle className="text-base font-semibold">Recently expired</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Documents already past their end date
+              <CardTitle className="text-base">{t("dashboardRecentAlerts")}</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t("dashboardRecentAlertsDescription")}
               </p>
             </div>
-            <AlertTriangle className="h-4 w-4 text-rose-500" />
-          </CardHeader>
-          <CardContent className="p-0">
-            {isLoading ? (
-              <DocListSkeleton />
-            ) : !summary || summary.recentlyExpired.length === 0 ? (
-              <div className="px-6 pb-6">
-                <EmptyState
-                  icon={ShieldCheck}
-                  title="Nothing expired"
-                  description="Your fleet is in good standing. Keep it up."
-                />
-              </div>
-            ) : (
-              <DocList docs={summary.recentlyExpired} />
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="mt-4">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-          <div>
-            <CardTitle className="text-base font-semibold">Recent alerts</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Generated by the expiry monitor as documents approach their end date
-            </p>
+            <Bell className="h-5 w-5 text-muted-foreground" />
           </div>
-          <BellRing className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
+
         <CardContent>
-          {(notifData?.items.length ?? 0) === 0 ? (
-            <EmptyState
-              icon={Inbox}
-              title="No alerts yet"
-              description="The expiry monitor runs three times a day. Anything within 10 days of expiry will appear here."
-            />
-          ) : (
-            <ul className="divide-y divide-border/60">
-              {notifData!.items.slice(0, 6).map((n, idx) => (
-                <motion.li
-                  key={n.id}
-                  initial={{ opacity: 0, x: -4 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: idx * 0.03 }}
-                  className="flex items-start justify-between gap-4 py-3"
-                  data-testid={`alert-${n.id}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <Badge
-                      variant="outline"
-                      className={
-                        n.kind === "expired"
-                          ? "border-rose-500/40 text-rose-600"
-                          : "border-amber-500/40 text-amber-700"
-                      }
-                    >
-                      {n.kind === "expired" ? "Expired" : "Expiring"}
-                    </Badge>
-                    <p className="text-sm text-foreground">{n.message}</p>
-                  </div>
-                  <span className="shrink-0 text-[11px] text-muted-foreground">
-                    {format(new Date(n.createdAt), "MMM d")}
-                  </span>
-                </motion.li>
-              ))}
-            </ul>
-          )}
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl border p-4">
+              <p className="text-sm text-muted-foreground">{t("dashboardAlertExpiring")}</p>
+              <p className="mt-2 text-2xl font-bold">{dashboard.expiringCount}</p>
+            </div>
+
+            <div className="rounded-xl border p-4">
+              <p className="text-sm text-muted-foreground">{t("dashboardAlertExpired")}</p>
+              <p className="mt-2 text-2xl font-bold">{dashboard.expiredCount}</p>
+            </div>
+
+            <div className="rounded-xl border p-4">
+              <p className="text-sm text-muted-foreground">{t("dashboardUnassignedTir")}</p>
+              <p className="mt-2 text-2xl font-bold">{dashboard.unassignedTir.length}</p>
+            </div>
+
+            <div className="rounded-xl border p-4">
+              <p className="text-sm text-muted-foreground">{t("dashboardUnassignedDazvol")}</p>
+              <p className="mt-2 text-2xl font-bold">{dashboard.unassignedDazvols.length}</p>
+            </div>
+          </div>
+
+          {dashboard.expiringCount === 0 &&
+          dashboard.expiredCount === 0 &&
+          dashboard.unassignedTir.length === 0 &&
+          dashboard.unassignedDazvols.length === 0 ? (
+            <div className="mt-4 flex items-center gap-2 rounded-xl border bg-emerald-50 p-4 text-emerald-700">
+              <CheckCircle2 className="h-5 w-5" />
+              <p className="text-sm font-medium">{t("dashboardEverythingOk")}</p>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-function DocList({ docs }: { docs: Document[] }) {
-  return (
-    <ul className="divide-y divide-border/60">
-      {docs.map((d, idx) => (
-        <motion.li
-          key={d.id}
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: idx * 0.03 }}
-        >
-          <Link
-            href={`/vehicles/${d.vehicleId}`}
-            className="flex items-center justify-between gap-4 px-6 py-3 transition-colors hover:bg-muted/40"
-            data-testid={`doc-row-${d.id}`}
-          >
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-foreground">{d.name}</p>
-              <p className="truncate text-xs text-muted-foreground">
-                {d.vehicleName ?? "Unknown"}
-                {d.vehiclePlateNumber ? ` • ${d.vehiclePlateNumber}` : ""}
-              </p>
-            </div>
-            <div className="flex flex-col items-end gap-1">
-              <StatusPill
-                status={d.status}
-                label={
-                  d.status === "expired"
-                    ? `Expired ${Math.abs(d.daysRemaining)}d ago`
-                    : d.status === "expiring"
-                      ? `${d.daysRemaining}d left`
-                      : "Valid"
-                }
-              />
-              <span className="text-[10px] text-muted-foreground">
-                {format(new Date(d.endDate), "MMM d, yyyy")}
-              </span>
-            </div>
-          </Link>
-        </motion.li>
-      ))}
-    </ul>
-  );
-}
-
-function DocListSkeleton() {
-  return (
-    <ul className="divide-y divide-border/60">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <li key={i} className="flex items-center justify-between gap-4 px-6 py-3">
-          <div className="flex-1 space-y-2">
-            <Skeleton className="h-3.5 w-1/3" />
-            <Skeleton className="h-3 w-1/2" />
-          </div>
-          <Skeleton className="h-5 w-16 rounded-full" />
-        </li>
-      ))}
-    </ul>
   );
 }
