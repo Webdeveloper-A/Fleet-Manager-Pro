@@ -20,6 +20,9 @@ import Dazvols from "@/pages/Dazvols";
 import Ads from "@/pages/Ads";
 import Profile from "@/pages/Profile";
 import NotFound from "@/pages/not-found";
+import ControlCenter from "@/pages/ControlCenter";
+import Reports from "@/pages/Reports";
+import ActivityLog from "@/pages/ActivityLog";
 
 function RootRoute() {
   const { principal } = useAuth();
@@ -164,7 +167,23 @@ export default function Router() {
           <AdminCompanies />
         </ProtectedShell>
       </Route>
+<Route path="/control">
+  <ProtectedShell>
+    <ControlCenter />
+  </ProtectedShell>
+</Route>
 
+<Route path="/reports">
+  <ProtectedShell>
+    <Reports />
+  </ProtectedShell>
+</Route>
+
+<Route path="/activity">
+  <ProtectedShell>
+    <ActivityLog />
+  </ProtectedShell>
+</Route>
       <Route>
         <ProtectedShell>
           <NotFound />

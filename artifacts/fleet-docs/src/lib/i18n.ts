@@ -15,6 +15,9 @@ dazvols: "Dazvollar",
 telegram: "Telegram",
     callBot: "Support markazi",
 ads: "Reklama",
+controlCenter: "Nazorat markazi",
+analyticsReports: "Hisobotlar",
+activityLog: "Faollik tarixi",
 
 
 
@@ -77,6 +80,9 @@ dazvols: "Дозволы",
 telegram: "Telegram",
     callBot: "Центр поддержки",
 ads: "Реклама",
+controlCenter: "Центр контроля",
+analyticsReports: "Отчёты",
+activityLog: "История активности",
 
 
 
@@ -139,6 +145,9 @@ dazvols: "Permits",
 telegram: "Telegram",
     callBot: "Support Center",
 ads: "Ads",
+controlCenter: "Control center",
+analyticsReports: "Reports",
+activityLog: "Activity log",
 
 
 

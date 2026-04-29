@@ -10,6 +10,9 @@ import {
   ScrollText,
   ClipboardCheck,
   Megaphone,
+  Activity,
+BarChart3,
+Gauge,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -32,6 +35,24 @@ const NAV: NavItem[] = [
     icon: Home,
     roles: ["company"],
   },
+  {
+  href: "/control",
+  labelKey: "controlCenter",
+  icon: Gauge,
+  roles: ["company"],
+},
+{
+  href: "/reports",
+  labelKey: "analyticsReports",
+  icon: BarChart3,
+  roles: ["company"],
+},
+{
+  href: "/activity",
+  labelKey: "activityLog",
+  icon: Activity,
+  roles: ["company"],
+},
   {
     href: "/vehicles",
     labelKey: "vehicles",
