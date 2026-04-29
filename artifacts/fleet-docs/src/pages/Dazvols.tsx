@@ -1,27 +1,22 @@
-import { useMemo, useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Plus,
-  Search,
-  ScrollText,
-  CalendarClock,
-  Truck,
-  Trash2,
-  MoreHorizontal,
+  LinkIcon,
   Loader2,
+  MoreHorizontal,
   Pencil,
-LinkIcon,
+  Plus,
+  ScrollText,
+  Search,
+  Trash2,
 } from "lucide-react";
-import {
-  useListVehicles,
-  getListVehiclesQueryKey,
-} from "@workspace/api-client-react";
+import { useListVehicles, getListVehiclesQueryKey } from "@workspace/api-client-react";
 import { PageHeader } from "@/components/PageHeader";
+import { EmptyState } from "@/components/EmptyState";
+import { DataPagination } from "@/components/DataPagination";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { EmptyState } from "@/components/EmptyState";
-import { DataPagination } from "@/components/DataPagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -64,6 +59,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import {
+  assignDazvolToVehicle,
   createDazvol,
   deleteDazvol,
   listDazvols,
@@ -72,13 +68,11 @@ import {
   type DazvolPayload,
   type DazvolPermitType,
   type DazvolStatus,
-assignDazvolToVehicle,
 } from "@/lib/dazvols-api";
 
 const PAGE_SIZE = 15;
 
 type FormState = {
-  vehicleId: string;
   permitNumber: string;
   country: string;
   permitType: DazvolPermitType;
@@ -99,9 +93,8 @@ function useDebounced<T>(value: T, delay = 300): T {
   return v;
 }
 
-function emptyForm(vehicleId = ""): FormState {
+function emptyForm(): FormState {
   return {
-    vehicleId,
     permitNumber: "",
     country: "",
     permitType: "bilateral",
@@ -143,7 +136,6 @@ function toDateInput(value?: string | null) {
 
 function buildPayload(form: FormState): DazvolPayload {
   return {
-    vehicleId: form.vehicleId,
     permitNumber: form.permitNumber.trim(),
     country: form.country.trim(),
     permitType: form.permitType,
@@ -151,6 +143,7 @@ function buildPayload(form: FormState): DazvolPayload {
     expiryDate: form.expiryDate || null,
     status: form.status,
     note: form.note.trim() || null,
+    vehicleId: null,
   };
 }
 
@@ -167,8 +160,10 @@ export default function Dazvols() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Dazvol | null>(null);
   const [deleting, setDeleting] = useState<Dazvol | null>(null);
-const [assigning, setAssigning] = useState<Dazvol | null>(null);
-const [assignVehicleId, setAssignVehicleId] = useState("");
+
+  const [assigning, setAssigning] = useState<Dazvol | null>(null);
+  const [assignVehicleId, setAssignVehicleId] = useState("");
+
   const [form, setForm] = useState<FormState>(() => emptyForm());
 
   useEffect(() => {
@@ -226,6 +221,21 @@ const [assignVehicleId, setAssignVehicleId] = useState("");
     },
   });
 
+  const assignMutation = useMutation({
+    mutationFn: ({ id, selectedVehicleId }: { id: string; selectedVehicleId: string }) =>
+      assignDazvolToVehicle(token, id, selectedVehicleId),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["dazvols"] });
+      toast({ title: "Dazvol transportga biriktirildi" });
+      setAssigning(null);
+      setAssignVehicleId("");
+    },
+    onError: (err) => {
+      const message = err instanceof Error ? err.message : "Dazvolni biriktirib bo‘lmadi";
+      toast({ title: "Xatolik", description: message, variant: "destructive" });
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteDazvol(token, id),
     onSuccess: async () => {
@@ -239,34 +249,15 @@ const [assignVehicleId, setAssignVehicleId] = useState("");
     },
   });
 
-const assignMutation = useMutation({
-  mutationFn: ({ id, vehicleId }: { id: string; vehicleId: string }) =>
-    assignDazvolToVehicle(token, id, vehicleId),
-  onSuccess: async () => {
-    await qc.invalidateQueries({ queryKey: ["dazvols"] });
-    toast({ title: "Dazvol transportga biriktirildi" });
-    setAssigning(null);
-    setAssignVehicleId("");
-  },
-  onError: (err) => {
-    const message = err instanceof Error ? err.message : "Dazvolni biriktirib bo‘lmadi";
-    toast({ title: "Xatolik", description: message, variant: "destructive" });
-  },
-});
-
   function openCreate() {
-    const preferredVehicleId =
-      vehicleId !== "all" ? vehicleId : vehicles.length > 0 ? vehicles[0].id : "";
-
     setEditing(null);
-    setForm(emptyForm(preferredVehicleId));
+    setForm(emptyForm());
     setDialogOpen(true);
   }
 
   function openEdit(item: Dazvol) {
     setEditing(item);
     setForm({
-      vehicleId: item.vehicleId,
       permitNumber: item.permitNumber,
       country: item.country,
       permitType: item.permitType,
@@ -286,8 +277,6 @@ const assignMutation = useMutation({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-
-
 
     if (!form.permitNumber.trim() || !form.country.trim()) {
       toast({
@@ -314,7 +303,7 @@ const assignMutation = useMutation({
     <div className="space-y-5">
       <PageHeader
         title="Dazvollar"
-        description="Xalqaro avtotashuv ruxsatnomalarini davlat, transport va amal qilish muddati bo‘yicha boshqaring."
+        description="Dazvol avval alohida qo‘shiladi, keyin kerakli transportga biriktiriladi."
         actions={
           <Button onClick={openCreate}>
             <Plus className="mr-1 h-4 w-4" />
@@ -329,7 +318,7 @@ const assignMutation = useMutation({
           <Input
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Dazvol raqami, davlat yoki transport..."
+            placeholder="Dazvol raqami yoki davlat..."
             className="pl-9"
           />
         </div>
@@ -373,7 +362,7 @@ const assignMutation = useMutation({
         <EmptyState
           icon={ScrollText}
           title="Dazvol yozuvlari mavjud emas"
-          description="Dazvollarni database’da saqlang va transportlar bo‘yicha alohida nazorat qiling."
+          description="Avval Dazvol qo‘shing, keyin uni transportga biriktiring."
           action={
             <Button onClick={openCreate}>
               <Plus className="mr-1 h-4 w-4" />
@@ -391,7 +380,7 @@ const assignMutation = useMutation({
                     <TableHead>Dazvol</TableHead>
                     <TableHead>Davlat</TableHead>
                     <TableHead>Turi</TableHead>
-                    <TableHead>Transport</TableHead>
+                    <TableHead>Biriktirilgan transport</TableHead>
                     <TableHead>Amal muddati</TableHead>
                     <TableHead>Holat</TableHead>
                     <TableHead />
@@ -404,15 +393,24 @@ const assignMutation = useMutation({
                       <TableCell className="font-medium">{item.permitNumber}</TableCell>
                       <TableCell>{item.country}</TableCell>
                       <TableCell>{permitTypeLabel(item.permitType)}</TableCell>
+
                       <TableCell>
-                        <div className="flex flex-col">
-                          <span>{item.vehicleName ?? "Noma’lum"}</span>
-                          <span className="font-mono text-xs text-muted-foreground">
-                            {item.vehiclePlateNumber ?? ""}
+                        {item.vehicleId ? (
+                          <div className="flex flex-col">
+                            <span>{item.vehicleName ?? "Noma’lum"}</span>
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {item.vehiclePlateNumber ?? ""}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700">
+                            Biriktirilmagan
                           </span>
-                        </div>
+                        )}
                       </TableCell>
+
                       <TableCell>{dateLabel(item.expiryDate)}</TableCell>
+
                       <TableCell>
                         <span
                           className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(
@@ -422,6 +420,7 @@ const assignMutation = useMutation({
                           {statusLabel(item.status)}
                         </span>
                       </TableCell>
+
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -431,19 +430,21 @@ const assignMutation = useMutation({
                           </DropdownMenuTrigger>
 
                           <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setAssigning(item);
+                                setAssignVehicleId(item.vehicleId ?? "");
+                              }}
+                            >
+                              <LinkIcon className="mr-2 h-4 w-4" />
+                              Transportga biriktirish
+                            </DropdownMenuItem>
+
                             <DropdownMenuItem onClick={() => openEdit(item)}>
                               <Pencil className="mr-2 h-4 w-4" />
                               Tahrirlash
                             </DropdownMenuItem>
-<DropdownMenuItem
-  onClick={() => {
-    setAssigning(item);
-    setAssignVehicleId(item.vehicleId ?? "");
-  }}
->
-  <LinkIcon className="mr-2 h-4 w-4" />
-  Transportga biriktirish
-</DropdownMenuItem>
+
                             <DropdownMenuItem
                               className="text-rose-600 focus:text-rose-600"
                               onClick={() => setDeleting(item)}
@@ -473,30 +474,10 @@ const assignMutation = useMutation({
       <Dialog open={dialogOpen} onOpenChange={(open) => !open && closeDialog()}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>
-              {editing ? "Dazvolni tahrirlash" : "Yangi dazvol qo‘shish"}
-            </DialogTitle>
+            <DialogTitle>{editing ? "Dazvolni tahrirlash" : "Yangi Dazvol qo‘shish"}</DialogTitle>
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Transport
-              </label>
-              <select
-                value={form.vehicleId}
-                onChange={(e) => setForm((p) => ({ ...p, vehicleId: e.target.value }))}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="">Transport tanlang</option>
-                {vehicles.map((vehicle) => (
-                  <option key={vehicle.id} value={vehicle.id}>
-                    {vehicle.name} {vehicle.plateNumber ? `— ${vehicle.plateNumber}` : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">
                 Dazvol raqami
@@ -526,10 +507,7 @@ const assignMutation = useMutation({
               <select
                 value={form.permitType}
                 onChange={(e) =>
-                  setForm((p) => ({
-                    ...p,
-                    permitType: e.target.value as DazvolPermitType,
-                  }))
+                  setForm((p) => ({ ...p, permitType: e.target.value as DazvolPermitType }))
                 }
                 className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               >
@@ -537,6 +515,23 @@ const assignMutation = useMutation({
                 <option value="transit">Tranzit</option>
                 <option value="third_country">Uchinchi davlat</option>
                 <option value="special">Maxsus</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Holati
+              </label>
+              <select
+                value={form.status}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, status: e.target.value as DazvolStatus }))
+                }
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="active">Faol</option>
+                <option value="used">Foydalanilgan</option>
+                <option value="expired">Muddati o‘tgan</option>
               </select>
             </div>
 
@@ -560,23 +555,6 @@ const assignMutation = useMutation({
                 value={form.expiryDate}
                 onChange={(e) => setForm((p) => ({ ...p, expiryDate: e.target.value }))}
               />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Holati
-              </label>
-              <select
-                value={form.status}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, status: e.target.value as DazvolStatus }))
-                }
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="active">Faol</option>
-                <option value="used">Foydalanilgan</option>
-                <option value="expired">Muddati o‘tgan</option>
-              </select>
             </div>
 
             <div className="md:col-span-2">
@@ -607,6 +585,63 @@ const assignMutation = useMutation({
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!assigning} onOpenChange={(open) => !open && setAssigning(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Dazvolni transportga biriktirish</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+              <p className="font-medium">{assigning?.permitNumber}</p>
+              <p className="text-muted-foreground">
+                {assigning?.country} — {assigning ? permitTypeLabel(assigning.permitType) : ""}
+              </p>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Transport tanlang
+              </label>
+              <select
+                value={assignVehicleId}
+                onChange={(e) => setAssignVehicleId(e.target.value)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">Transport tanlang</option>
+                {vehicles.map((vehicle) => (
+                  <option key={vehicle.id} value={vehicle.id}>
+                    {vehicle.name} {vehicle.plateNumber ? `— ${vehicle.plateNumber}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAssigning(null)}>
+              Bekor qilish
+            </Button>
+            <Button
+              disabled={!assignVehicleId || assignMutation.isPending}
+              onClick={() => {
+                if (!assigning || !assignVehicleId) return;
+                assignMutation.mutate({
+                  id: assigning.id,
+                  selectedVehicleId: assignVehicleId,
+                });
+              }}
+            >
+              {assignMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Biriktirish"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -631,56 +666,6 @@ const assignMutation = useMutation({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-<Dialog open={!!assigning} onOpenChange={(open) => !open && setAssigning(null)}>
-  <DialogContent className="max-w-lg">
-    <DialogHeader>
-      <DialogTitle>Dazvolni transportga biriktirish</DialogTitle>
-    </DialogHeader>
-
-    <div className="space-y-4">
-      <div className="rounded-lg border bg-muted/30 p-3 text-sm">
-        <p className="font-medium">{assigning?.permitNumber}</p>
-        <p className="text-muted-foreground">
-          {assigning?.country} — {assigning ? permitTypeLabel(assigning.permitType) : ""}
-        </p>
-      </div>
-
-      <div>
-        <label className="mb-1 block text-xs font-medium text-muted-foreground">
-          Transport tanlang
-        </label>
-        <select
-          value={assignVehicleId}
-          onChange={(e) => setAssignVehicleId(e.target.value)}
-          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-        >
-          <option value="">Transport tanlang</option>
-          {vehicles.map((vehicle) => (
-            <option key={vehicle.id} value={vehicle.id}>
-              {vehicle.name} {vehicle.plateNumber ? `— ${vehicle.plateNumber}` : ""}
-            </option>
-          ))}
-        </select>
-      </div>
-    </div>
-
-    <DialogFooter>
-      <Button variant="ghost" onClick={() => setAssigning(null)}>
-        Bekor qilish
-      </Button>
-
-      <Button
-        disabled={!assignVehicleId || assignMutation.isPending}
-        onClick={() => {
-          if (!assigning || !assignVehicleId) return;
-          assignMutation.mutate({ id: assigning.id, vehicleId: assignVehicleId });
-        }}
-      >
-        {assignMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Biriktirish"}
-      </Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
     </div>
   );
 }

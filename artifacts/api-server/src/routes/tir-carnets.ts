@@ -9,17 +9,26 @@ const router: IRouter = Router();
 
 const statusSchema = z.enum(["active", "used", "expired"]);
 
+const optionalUuidSchema = z.preprocess(
+  (value) => (value === "" ? null : value),
+  z.string().uuid().optional().nullable(),
+);
+
 const createSchema = z.object({
-  vehicleId: z.string().uuid().optional().nullable(),
   carnetNumber: z.string().trim().min(1).max(128),
-  route: z.string().trim().max(255).optional(),
+  route: z.string().trim().max(255).optional().nullable(),
   issueDate: z.string().optional().nullable(),
   expiryDate: z.string().optional().nullable(),
   status: statusSchema.optional().default("active"),
-  note: z.string().trim().max(5000).optional(),
+  note: z.string().trim().max(5000).optional().nullable(),
+  vehicleId: optionalUuidSchema,
 });
 
 const updateSchema = createSchema.partial();
+
+const assignVehicleSchema = z.object({
+  vehicleId: z.string().uuid(),
+});
 
 function parseDate(value?: string | null) {
   if (!value) return null;
@@ -46,7 +55,7 @@ async function assertVehicleBelongsToCompany(vehicleId: string, companyId: strin
 function mapRow(row: {
   id: string;
   companyId: string;
-  vehicleId: string;
+  vehicleId: string | null;
   vehicleName: string | null;
   vehiclePlateNumber: string | null;
   carnetNumber: string;
@@ -155,19 +164,23 @@ router.post("/tir-carnets", requireAuth, requireCompany, async (req: Request, re
     const parsed = createSchema.safeParse(req.body);
 
     if (!parsed.success) {
-      res.status(400).json({ error: "TIR Carnet ma’lumotlari noto‘g‘ri" });
+      res.status(400).json({
+        error: "TIR Carnet ma’lumotlari noto‘g‘ri",
+        details: parsed.error.flatten(),
+      });
       return;
     }
 
     const companyId = req.principal!.companyId!;
-  if (parsed.data.vehicleId) {
-  const vehicleOk = await assertVehicleBelongsToCompany(parsed.data.vehicleId, companyId);
 
-  if (!vehicleOk) {
-    res.status(400).json({ error: "Transport topilmadi yoki kompaniyaga tegishli emas" });
-    return;
-  }
-}
+    if (parsed.data.vehicleId) {
+      const vehicleOk = await assertVehicleBelongsToCompany(parsed.data.vehicleId, companyId);
+
+      if (!vehicleOk) {
+        res.status(400).json({ error: "Transport topilmadi yoki kompaniyaga tegishli emas" });
+        return;
+      }
+    }
 
     const now = new Date();
 
@@ -196,10 +209,14 @@ router.post("/tir-carnets", requireAuth, requireCompany, async (req: Request, re
 
 router.patch("/tir-carnets/:id", requireAuth, requireCompany, async (req: Request, res: Response) => {
   try {
+    const id = String(req.params.id);
     const parsed = updateSchema.safeParse(req.body);
 
     if (!parsed.success) {
-      res.status(400).json({ error: "TIR Carnet ma’lumotlari noto‘g‘ri" });
+      res.status(400).json({
+        error: "TIR Carnet ma’lumotlari noto‘g‘ri",
+        details: parsed.error.flatten(),
+      });
       return;
     }
 
@@ -221,15 +238,19 @@ router.patch("/tir-carnets/:id", requireAuth, requireCompany, async (req: Reques
     if (parsed.data.vehicleId !== undefined) updateData.vehicleId = parsed.data.vehicleId || null;
     if (parsed.data.carnetNumber !== undefined) updateData.carnetNumber = parsed.data.carnetNumber;
     if (parsed.data.route !== undefined) updateData.route = parsed.data.route || null;
-    if (parsed.data.issueDate !== undefined) updateData.issueDate = parseDate(parsed.data.issueDate);
-    if (parsed.data.expiryDate !== undefined) updateData.expiryDate = parseDate(parsed.data.expiryDate);
+    if (parsed.data.issueDate !== undefined) {
+      updateData.issueDate = parseDate(parsed.data.issueDate);
+    }
+    if (parsed.data.expiryDate !== undefined) {
+      updateData.expiryDate = parseDate(parsed.data.expiryDate);
+    }
     if (parsed.data.status !== undefined) updateData.status = parsed.data.status;
     if (parsed.data.note !== undefined) updateData.note = parsed.data.note || null;
 
     const [updated] = await db
       .update(tirCarnetsTable)
       .set(updateData)
-      .where(and(eq(tirCarnetsTable.id, req.params.id), eq(tirCarnetsTable.companyId, companyId)))
+      .where(and(eq(tirCarnetsTable.id, id), eq(tirCarnetsTable.companyId, companyId)))
       .returning();
 
     if (!updated) {
@@ -244,13 +265,61 @@ router.patch("/tir-carnets/:id", requireAuth, requireCompany, async (req: Reques
   }
 });
 
+router.post(
+  "/tir-carnets/:id/assign-vehicle",
+  requireAuth,
+  requireCompany,
+  async (req: Request, res: Response) => {
+    try {
+      const id = String(req.params.id);
+      const parsed = assignVehicleSchema.safeParse(req.body);
+
+      if (!parsed.success) {
+        res.status(400).json({
+          error: "Transport noto‘g‘ri tanlangan",
+          details: parsed.error.flatten(),
+        });
+        return;
+      }
+
+      const companyId = req.principal!.companyId!;
+      const vehicleOk = await assertVehicleBelongsToCompany(parsed.data.vehicleId, companyId);
+
+      if (!vehicleOk) {
+        res.status(400).json({ error: "Transport topilmadi yoki kompaniyaga tegishli emas" });
+        return;
+      }
+
+      const [updated] = await db
+        .update(tirCarnetsTable)
+        .set({
+          vehicleId: parsed.data.vehicleId,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(tirCarnetsTable.id, id), eq(tirCarnetsTable.companyId, companyId)))
+        .returning();
+
+      if (!updated) {
+        res.status(404).json({ error: "TIR Carnet topilmadi" });
+        return;
+      }
+
+      res.json({ item: updated });
+    } catch (err) {
+      console.error("[tir-carnets] assign vehicle failed", err);
+      res.status(500).json({ error: "TIR Carnetni transportga biriktirib bo‘lmadi" });
+    }
+  },
+);
+
 router.delete("/tir-carnets/:id", requireAuth, requireCompany, async (req: Request, res: Response) => {
   try {
+    const id = String(req.params.id);
     const companyId = req.principal!.companyId!;
 
     const [deleted] = await db
       .delete(tirCarnetsTable)
-      .where(and(eq(tirCarnetsTable.id, req.params.id), eq(tirCarnetsTable.companyId, companyId)))
+      .where(and(eq(tirCarnetsTable.id, id), eq(tirCarnetsTable.companyId, companyId)))
       .returning({ id: tirCarnetsTable.id });
 
     if (!deleted) {

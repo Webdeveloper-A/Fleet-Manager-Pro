@@ -17,13 +17,13 @@ export type TirCarnet = {
 };
 
 export type TirCarnetPayload = {
-  vehicleId?: string | null;
   carnetNumber: string;
   route?: string | null;
   issueDate?: string | null;
   expiryDate?: string | null;
   status: TirCarnetStatus;
   note?: string | null;
+  vehicleId?: string | null;
 };
 
 export type TirCarnetListResponse = {
@@ -96,6 +96,13 @@ export function updateTirCarnet(token: string | null, id: string, data: Partial<
   return apiRequest<{ item: TirCarnet }>(`/api/tir-carnets/${id}`, token, {
     method: "PATCH",
     body: JSON.stringify(data),
+  });
+}
+
+export function assignTirCarnetToVehicle(token: string | null, id: string, vehicleId: string) {
+  return apiRequest<{ item: TirCarnet }>(`/api/tir-carnets/${id}/assign-vehicle`, token, {
+    method: "POST",
+    body: JSON.stringify({ vehicleId }),
   });
 }
 

@@ -1,26 +1,22 @@
-import { useMemo, useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ClipboardCheck,
+  LinkIcon,
+  Loader2,
+  MoreHorizontal,
+  Pencil,
   Plus,
   Search,
-  ClipboardCheck,
-  CalendarClock,
-  Truck,
   Trash2,
-  MoreHorizontal,
-  Loader2,
-  Pencil,
 } from "lucide-react";
-import {
-  useListVehicles,
-  getListVehiclesQueryKey,
-} from "@workspace/api-client-react";
+import { useListVehicles, getListVehiclesQueryKey } from "@workspace/api-client-react";
 import { PageHeader } from "@/components/PageHeader";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/EmptyState";
 import { DataPagination } from "@/components/DataPagination";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -63,6 +59,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import {
+  assignTirCarnetToVehicle,
   createTirCarnet,
   deleteTirCarnet,
   listTirCarnets,
@@ -75,7 +72,6 @@ import {
 const PAGE_SIZE = 15;
 
 type FormState = {
-  vehicleId: string;
   carnetNumber: string;
   route: string;
   issueDate: string;
@@ -95,9 +91,8 @@ function useDebounced<T>(value: T, delay = 300): T {
   return v;
 }
 
-function emptyForm(vehicleId = ""): FormState {
+function emptyForm(): FormState {
   return {
-    vehicleId,
     carnetNumber: "",
     route: "",
     issueDate: "",
@@ -131,13 +126,13 @@ function toDateInput(value?: string | null) {
 
 function buildPayload(form: FormState): TirCarnetPayload {
   return {
-    vehicleId: form.vehicleId,
     carnetNumber: form.carnetNumber.trim(),
     route: form.route.trim() || null,
     issueDate: form.issueDate || null,
     expiryDate: form.expiryDate || null,
     status: form.status,
     note: form.note.trim() || null,
+    vehicleId: null,
   };
 }
 
@@ -154,6 +149,10 @@ export default function TIRCarnets() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<TirCarnet | null>(null);
   const [deleting, setDeleting] = useState<TirCarnet | null>(null);
+
+  const [assigning, setAssigning] = useState<TirCarnet | null>(null);
+  const [assignVehicleId, setAssignVehicleId] = useState("");
+
   const [form, setForm] = useState<FormState>(() => emptyForm());
 
   useEffect(() => {
@@ -211,6 +210,21 @@ export default function TIRCarnets() {
     },
   });
 
+  const assignMutation = useMutation({
+    mutationFn: ({ id, selectedVehicleId }: { id: string; selectedVehicleId: string }) =>
+      assignTirCarnetToVehicle(token, id, selectedVehicleId),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["tir-carnets"] });
+      toast({ title: "TIR Carnet transportga biriktirildi" });
+      setAssigning(null);
+      setAssignVehicleId("");
+    },
+    onError: (err) => {
+      const message = err instanceof Error ? err.message : "TIR Carnetni biriktirib bo‘lmadi";
+      toast({ title: "Xatolik", description: message, variant: "destructive" });
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteTirCarnet(token, id),
     onSuccess: async () => {
@@ -225,18 +239,14 @@ export default function TIRCarnets() {
   });
 
   function openCreate() {
-    const preferredVehicleId =
-      vehicleId !== "all" ? vehicleId : vehicles.length > 0 ? vehicles[0].id : "";
-
     setEditing(null);
-    setForm(emptyForm(preferredVehicleId));
+    setForm(emptyForm());
     setDialogOpen(true);
   }
 
   function openEdit(item: TirCarnet) {
     setEditing(item);
     setForm({
-      vehicleId: item.vehicleId,
       carnetNumber: item.carnetNumber,
       route: item.route ?? "",
       issueDate: toDateInput(item.issueDate),
@@ -255,8 +265,6 @@ export default function TIRCarnets() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-
-
 
     if (!form.carnetNumber.trim()) {
       toast({
@@ -282,7 +290,7 @@ export default function TIRCarnets() {
     <div className="space-y-5">
       <PageHeader
         title="TIR Carnet"
-        description="Xalqaro tashuvlarda foydalaniladigan TIR Carnet hujjatlarini transportlar kesimida boshqaring."
+        description="TIR Carnet avval alohida qo‘shiladi, keyin kerakli transportga biriktiriladi."
         actions={
           <Button onClick={openCreate}>
             <Plus className="mr-1 h-4 w-4" />
@@ -297,7 +305,7 @@ export default function TIRCarnets() {
           <Input
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="TIR raqami, transport yoki yo‘nalish..."
+            placeholder="TIR raqami yoki yo‘nalish..."
             className="pl-9"
           />
         </div>
@@ -341,7 +349,7 @@ export default function TIRCarnets() {
         <EmptyState
           icon={ClipboardCheck}
           title="TIR Carnet yozuvlari mavjud emas"
-          description="Yangi TIR Carnet qo‘shib, xalqaro tashuv hujjatlarini database orqali nazorat qiling."
+          description="Avval TIR Carnet qo‘shing, keyin uni transportga biriktiring."
           action={
             <Button onClick={openCreate}>
               <Plus className="mr-1 h-4 w-4" />
@@ -357,9 +365,8 @@ export default function TIRCarnets() {
                 <TableHeader>
                   <TableRow className="bg-muted/40">
                     <TableHead>TIR Carnet</TableHead>
-                    <TableHead>Transport</TableHead>
+                    <TableHead>Biriktirilgan transport</TableHead>
                     <TableHead>Yo‘nalish</TableHead>
-                    <TableHead>Berilgan sana</TableHead>
                     <TableHead>Amal muddati</TableHead>
                     <TableHead>Holat</TableHead>
                     <TableHead />
@@ -370,17 +377,25 @@ export default function TIRCarnets() {
                   {items.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.carnetNumber}</TableCell>
+
                       <TableCell>
-                        <div className="flex flex-col">
-                          <span>{item.vehicleName ?? "Noma’lum"}</span>
-                          <span className="font-mono text-xs text-muted-foreground">
-                            {item.vehiclePlateNumber ?? ""}
+                        {item.vehicleId ? (
+                          <div className="flex flex-col">
+                            <span>{item.vehicleName ?? "Noma’lum"}</span>
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {item.vehiclePlateNumber ?? ""}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700">
+                            Biriktirilmagan
                           </span>
-                        </div>
+                        )}
                       </TableCell>
+
                       <TableCell>{item.route || "—"}</TableCell>
-                      <TableCell>{dateLabel(item.issueDate)}</TableCell>
                       <TableCell>{dateLabel(item.expiryDate)}</TableCell>
+
                       <TableCell>
                         <span
                           className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(
@@ -390,6 +405,7 @@ export default function TIRCarnets() {
                           {statusLabel(item.status)}
                         </span>
                       </TableCell>
+
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -399,6 +415,16 @@ export default function TIRCarnets() {
                           </DropdownMenuTrigger>
 
                           <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setAssigning(item);
+                                setAssignVehicleId(item.vehicleId ?? "");
+                              }}
+                            >
+                              <LinkIcon className="mr-2 h-4 w-4" />
+                              Transportga biriktirish
+                            </DropdownMenuItem>
+
                             <DropdownMenuItem onClick={() => openEdit(item)}>
                               <Pencil className="mr-2 h-4 w-4" />
                               Tahrirlash
@@ -441,41 +467,12 @@ export default function TIRCarnets() {
           <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Transport
-              </label>
-              <select
-                value={form.vehicleId}
-                onChange={(e) => setForm((p) => ({ ...p, vehicleId: e.target.value }))}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="">Transport tanlang</option>
-                {vehicles.map((vehicle) => (
-                  <option key={vehicle.id} value={vehicle.id}>
-                    {vehicle.name} {vehicle.plateNumber ? `— ${vehicle.plateNumber}` : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
                 TIR Carnet raqami
               </label>
               <Input
                 value={form.carnetNumber}
                 onChange={(e) => setForm((p) => ({ ...p, carnetNumber: e.target.value }))}
-                placeholder="Masalan: XH 12345678"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Yo‘nalish
-              </label>
-              <Input
-                value={form.route}
-                onChange={(e) => setForm((p) => ({ ...p, route: e.target.value }))}
-                placeholder="Masalan: Toshkent — Istanbul"
+                placeholder="Masalan: XH12345678"
               />
             </div>
 
@@ -494,6 +491,17 @@ export default function TIRCarnets() {
                 <option value="used">Yopilgan</option>
                 <option value="expired">Muddati o‘tgan</option>
               </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Yo‘nalish
+              </label>
+              <Input
+                value={form.route}
+                onChange={(e) => setForm((p) => ({ ...p, route: e.target.value }))}
+                placeholder="Masalan: Toshkent — Istanbul"
+              />
             </div>
 
             <div>
@@ -543,6 +551,61 @@ export default function TIRCarnets() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!assigning} onOpenChange={(open) => !open && setAssigning(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>TIR Carnetni transportga biriktirish</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+              <p className="font-medium">{assigning?.carnetNumber}</p>
+              <p className="text-muted-foreground">{assigning?.route || "Yo‘nalish ko‘rsatilmagan"}</p>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Transport tanlang
+              </label>
+              <select
+                value={assignVehicleId}
+                onChange={(e) => setAssignVehicleId(e.target.value)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">Transport tanlang</option>
+                {vehicles.map((vehicle) => (
+                  <option key={vehicle.id} value={vehicle.id}>
+                    {vehicle.name} {vehicle.plateNumber ? `— ${vehicle.plateNumber}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAssigning(null)}>
+              Bekor qilish
+            </Button>
+            <Button
+              disabled={!assignVehicleId || assignMutation.isPending}
+              onClick={() => {
+                if (!assigning || !assignVehicleId) return;
+                assignMutation.mutate({
+                  id: assigning.id,
+                  selectedVehicleId: assignVehicleId,
+                });
+              }}
+            >
+              {assignMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Biriktirish"
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
