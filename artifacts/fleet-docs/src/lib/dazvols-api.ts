@@ -1,5 +1,6 @@
 export type DazvolStatus = "active" | "used" | "expired";
 export type DazvolPermitType = "bilateral" | "transit" | "third_country" | "special";
+export type AssignmentFilter = "all" | "assigned" | "unassigned";
 
 export type Dazvol = {
   id: string;
@@ -19,12 +20,12 @@ export type Dazvol = {
 };
 
 export type DazvolPayload = {
-  permitNumber: string;
-  country: string;
-  permitType: DazvolPermitType;
+  permitNumber?: string;
+  country?: string;
+  permitType?: DazvolPermitType;
   issueDate?: string | null;
   expiryDate?: string | null;
-  status: DazvolStatus;
+  status?: DazvolStatus;
   note?: string | null;
   vehicleId?: string | null;
 };
@@ -72,6 +73,7 @@ export function listDazvols(
     search?: string;
     status?: string;
     vehicleId?: string;
+    assignment?: AssignmentFilter;
     page?: number;
     pageSize?: number;
   } = {},

@@ -9,6 +9,7 @@ import {
   Plus,
   Search,
   Trash2,
+  Unlink,
 } from "lucide-react";
 import { useListVehicles, getListVehiclesQueryKey } from "@workspace/api-client-react";
 import { PageHeader } from "@/components/PageHeader";
@@ -64,6 +65,7 @@ import {
   deleteTirCarnet,
   listTirCarnets,
   updateTirCarnet,
+  type AssignmentFilter,
   type TirCarnet,
   type TirCarnetPayload,
   type TirCarnetStatus,
@@ -79,6 +81,12 @@ type FormState = {
   status: TirCarnetStatus;
   note: string;
 };
+
+const FILTERS: Array<{ value: AssignmentFilter; label: string }> = [
+  { value: "all", label: "Barchasi" },
+  { value: "assigned", label: "Biriktirilganlar" },
+  { value: "unassigned", label: "Biriktirilmaganlar" },
+];
 
 function useDebounced<T>(value: T, delay = 300): T {
   const [v, setV] = useState(value);
@@ -119,6 +127,55 @@ function dateLabel(value?: string | null) {
   return new Date(value).toLocaleDateString("uz-UZ");
 }
 
+function daysLeft(value?: string | null) {
+  if (!value) return null;
+
+  const today = new Date();
+  const end = new Date(value);
+  today.setHours(0, 0, 0, 0);
+  end.setHours(0, 0, 0, 0);
+
+  return Math.ceil((end.getTime() - today.getTime()) / 86400000);
+}
+
+function expiryBadge(value?: string | null) {
+  const days = daysLeft(value);
+
+  if (days === null) {
+    return <span className="text-sm text-muted-foreground">Muddat kiritilmagan</span>;
+  }
+
+  if (days < 0) {
+    return (
+      <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-700">
+        {Math.abs(days)} kun o‘tgan
+      </span>
+    );
+  }
+
+  if (days <= 7) {
+    return (
+      <span className="rounded-full bg-orange-100 px-2 py-1 text-xs font-medium text-orange-700">
+        {days} kun qoldi
+      </span>
+    );
+  }
+
+  if (days <= 30) {
+    return (
+      <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700">
+        {days} kun qoldi
+      </span>
+    );
+  }
+
+  return (
+    <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700">
+      {days} kun qoldi
+    </span>
+  );
+}
+
 function toDateInput(value?: string | null) {
   if (!value) return "";
   return new Date(value).toISOString().slice(0, 10);
@@ -132,7 +189,6 @@ function buildPayload(form: FormState): TirCarnetPayload {
     expiryDate: form.expiryDate || null,
     status: form.status,
     note: form.note.trim() || null,
-    vehicleId: null,
   };
 }
 
@@ -144,6 +200,7 @@ export default function TIRCarnets() {
   const search = useDebounced(searchInput);
   const [status, setStatus] = useState("all");
   const [vehicleId, setVehicleId] = useState("all");
+  const [assignment, setAssignment] = useState<AssignmentFilter>("all");
   const [page, setPage] = useState(1);
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -157,22 +214,52 @@ export default function TIRCarnets() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, status, vehicleId]);
+  }, [search, status, vehicleId, assignment]);
 
   const params = useMemo(
     () => ({
       search: search || undefined,
       status: status === "all" ? undefined : status,
       vehicleId: vehicleId === "all" ? undefined : vehicleId,
+      assignment,
       page,
       pageSize: PAGE_SIZE,
     }),
-    [search, status, vehicleId, page],
+    [search, status, vehicleId, assignment, page],
   );
 
   const listQuery = useQuery({
     queryKey: ["tir-carnets", params],
     queryFn: () => listTirCarnets(token, params),
+    enabled: !!token,
+  });
+
+  const countBase = useMemo(
+    () => ({
+      search: search || undefined,
+      status: status === "all" ? undefined : status,
+      vehicleId: vehicleId === "all" ? undefined : vehicleId,
+      page: 1,
+      pageSize: 1,
+    }),
+    [search, status, vehicleId],
+  );
+
+  const allCount = useQuery({
+    queryKey: ["tir-carnets-count", "all", countBase],
+    queryFn: () => listTirCarnets(token, { ...countBase, assignment: "all" }),
+    enabled: !!token,
+  });
+
+  const assignedCount = useQuery({
+    queryKey: ["tir-carnets-count", "assigned", countBase],
+    queryFn: () => listTirCarnets(token, { ...countBase, assignment: "assigned" }),
+    enabled: !!token,
+  });
+
+  const unassignedCount = useQuery({
+    queryKey: ["tir-carnets-count", "unassigned", countBase],
+    queryFn: () => listTirCarnets(token, { ...countBase, assignment: "unassigned" }),
     enabled: !!token,
   });
 
@@ -225,6 +312,18 @@ export default function TIRCarnets() {
     },
   });
 
+  const unassignMutation = useMutation({
+    mutationFn: (id: string) => updateTirCarnet(token, id, { vehicleId: null }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["tir-carnets"] });
+      toast({ title: "TIR Carnet transportdan ajratildi" });
+    },
+    onError: (err) => {
+      const message = err instanceof Error ? err.message : "Transportdan ajratib bo‘lmadi";
+      toast({ title: "Xatolik", description: message, variant: "destructive" });
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteTirCarnet(token, id),
     onSuccess: async () => {
@@ -267,10 +366,7 @@ export default function TIRCarnets() {
     e.preventDefault();
 
     if (!form.carnetNumber.trim()) {
-      toast({
-        title: "TIR Carnet raqami kiritilmagan",
-        variant: "destructive",
-      });
+      toast({ title: "TIR Carnet raqami kiritilmagan", variant: "destructive" });
       return;
     }
 
@@ -286,11 +382,17 @@ export default function TIRCarnets() {
   const items = listQuery.data?.items ?? [];
   const total = listQuery.data?.total ?? 0;
 
+  const countMap: Record<AssignmentFilter, number> = {
+    all: allCount.data?.total ?? 0,
+    assigned: assignedCount.data?.total ?? 0,
+    unassigned: unassignedCount.data?.total ?? 0,
+  };
+
   return (
     <div className="space-y-5">
       <PageHeader
         title="TIR Carnet"
-        description="TIR Carnet avval alohida qo‘shiladi, keyin kerakli transportga biriktiriladi."
+        description="TIR Carnetlar avval alohida qo‘shiladi, keyin kerakli transport vositasiga biriktiriladi."
         actions={
           <Button onClick={openCreate}>
             <Plus className="mr-1 h-4 w-4" />
@@ -299,13 +401,30 @@ export default function TIRCarnets() {
         }
       />
 
+      <div className="flex flex-wrap gap-2">
+        {FILTERS.map((item) => (
+          <Button
+            key={item.value}
+            type="button"
+            variant={assignment === item.value ? "default" : "outline"}
+            onClick={() => setAssignment(item.value)}
+            className="rounded-full"
+          >
+            {item.label}
+            <span className="ml-2 rounded-full bg-background/20 px-2 py-0.5 text-xs">
+              {countMap[item.value]}
+            </span>
+          </Button>
+        ))}
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="TIR raqami yoki yo‘nalish..."
+            placeholder="TIR raqami, yo‘nalish yoki transport bo‘yicha qidirish..."
             className="pl-9"
           />
         </div>
@@ -348,8 +467,14 @@ export default function TIRCarnets() {
       ) : items.length === 0 ? (
         <EmptyState
           icon={ClipboardCheck}
-          title="TIR Carnet yozuvlari mavjud emas"
-          description="Avval TIR Carnet qo‘shing, keyin uni transportga biriktiring."
+          title={
+            assignment === "assigned"
+              ? "Transportga biriktirilgan TIR Carnetlar mavjud emas"
+              : assignment === "unassigned"
+                ? "Biriktirilmagan TIR Carnetlar mavjud emas"
+                : "TIR Carnet yozuvlari mavjud emas"
+          }
+          description="TIR Carnet qo‘shing yoki mavjud yozuvni transportga biriktiring."
           action={
             <Button onClick={openCreate}>
               <Plus className="mr-1 h-4 w-4" />
@@ -364,10 +489,10 @@ export default function TIRCarnets() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/40">
-                    <TableHead>TIR Carnet</TableHead>
-                    <TableHead>Biriktirilgan transport</TableHead>
+                    <TableHead>TIR raqami</TableHead>
                     <TableHead>Yo‘nalish</TableHead>
-                    <TableHead>Amal muddati</TableHead>
+                    <TableHead>Transport</TableHead>
+                    <TableHead>Amal qilish muddati</TableHead>
                     <TableHead>Holat</TableHead>
                     <TableHead />
                   </TableRow>
@@ -376,12 +501,13 @@ export default function TIRCarnets() {
                 <TableBody>
                   {items.map((item) => (
                     <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.carnetNumber}</TableCell>
+                      <TableCell className="font-semibold">{item.carnetNumber}</TableCell>
+                      <TableCell>{item.route || "—"}</TableCell>
 
                       <TableCell>
                         {item.vehicleId ? (
                           <div className="flex flex-col">
-                            <span>{item.vehicleName ?? "Noma’lum"}</span>
+                            <span>{item.vehicleName ?? "Noma’lum transport"}</span>
                             <span className="font-mono text-xs text-muted-foreground">
                               {item.vehiclePlateNumber ?? ""}
                             </span>
@@ -393,8 +519,12 @@ export default function TIRCarnets() {
                         )}
                       </TableCell>
 
-                      <TableCell>{item.route || "—"}</TableCell>
-                      <TableCell>{dateLabel(item.expiryDate)}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm">{dateLabel(item.expiryDate)}</span>
+                          {expiryBadge(item.expiryDate)}
+                        </div>
+                      </TableCell>
 
                       <TableCell>
                         <span
@@ -422,8 +552,17 @@ export default function TIRCarnets() {
                               }}
                             >
                               <LinkIcon className="mr-2 h-4 w-4" />
-                              Transportga biriktirish
+                              {item.vehicleId ? "Biriktirishni o‘zgartirish" : "Transportga biriktirish"}
                             </DropdownMenuItem>
+
+                            {item.vehicleId ? (
+                              <DropdownMenuItem
+                                onClick={() => unassignMutation.mutate(item.id)}
+                              >
+                                <Unlink className="mr-2 h-4 w-4" />
+                                Transportdan ajratish
+                              </DropdownMenuItem>
+                            ) : null}
 
                             <DropdownMenuItem onClick={() => openEdit(item)}>
                               <Pencil className="mr-2 h-4 w-4" />

@@ -1,4 +1,5 @@
 export type TirCarnetStatus = "active" | "used" | "expired";
+export type AssignmentFilter = "all" | "assigned" | "unassigned";
 
 export type TirCarnet = {
   id: string;
@@ -17,11 +18,11 @@ export type TirCarnet = {
 };
 
 export type TirCarnetPayload = {
-  carnetNumber: string;
+  carnetNumber?: string;
   route?: string | null;
   issueDate?: string | null;
   expiryDate?: string | null;
-  status: TirCarnetStatus;
+  status?: TirCarnetStatus;
   note?: string | null;
   vehicleId?: string | null;
 };
@@ -69,6 +70,7 @@ export function listTirCarnets(
     search?: string;
     status?: string;
     vehicleId?: string;
+    assignment?: AssignmentFilter;
     page?: number;
     pageSize?: number;
   } = {},

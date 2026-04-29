@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { z } from "zod";
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { dazvolsTable, vehiclesTable } from "@workspace/db/schema";
 import { requireAuth, requireCompany } from "../middlewares/auth";
@@ -10,18 +10,27 @@ const router: IRouter = Router();
 const statusSchema = z.enum(["active", "used", "expired"]);
 const permitTypeSchema = z.enum(["bilateral", "transit", "third_country", "special"]);
 
+const optionalUuidSchema = z.preprocess(
+  (value) => (value === "" ? null : value),
+  z.string().uuid().optional().nullable(),
+);
+
 const createSchema = z.object({
-  vehicleId: z.string().uuid().optional().nullable(),
   permitNumber: z.string().trim().min(1).max(128),
   country: z.string().trim().min(1).max(128),
   permitType: permitTypeSchema.optional().default("bilateral"),
   issueDate: z.string().optional().nullable(),
   expiryDate: z.string().optional().nullable(),
   status: statusSchema.optional().default("active"),
-  note: z.string().trim().max(5000).optional(),
+  note: z.string().trim().max(5000).optional().nullable(),
+  vehicleId: optionalUuidSchema,
 });
 
 const updateSchema = createSchema.partial();
+
+const assignVehicleSchema = z.object({
+  vehicleId: z.string().uuid(),
+});
 
 function parseDate(value?: string | null) {
   if (!value) return null;
@@ -48,7 +57,7 @@ async function assertVehicleBelongsToCompany(vehicleId: string, companyId: strin
 function mapRow(row: {
   id: string;
   companyId: string;
-  vehicleId: string;
+  vehicleId: string | null;
   vehicleName: string | null;
   vehiclePlateNumber: string | null;
   permitNumber: string;
@@ -85,12 +94,13 @@ router.get("/dazvols", requireAuth, requireCompany, async (req: Request, res: Re
     const search = String(req.query.search ?? "").trim();
     const status = String(req.query.status ?? "").trim();
     const vehicleId = String(req.query.vehicleId ?? "").trim();
+    const assignment = String(req.query.assignment ?? "all").trim();
 
     const page = Math.max(Number(req.query.page ?? 1), 1);
     const pageSize = Math.min(Math.max(Number(req.query.pageSize ?? 20), 1), 100);
     const offset = (page - 1) * pageSize;
 
-    const filters = [eq(dazvolsTable.companyId, companyId)];
+    const filters: SQL[] = [eq(dazvolsTable.companyId, companyId)];
 
     if (status && status !== "all") {
       filters.push(eq(dazvolsTable.status, status));
@@ -98,6 +108,14 @@ router.get("/dazvols", requireAuth, requireCompany, async (req: Request, res: Re
 
     if (vehicleId && vehicleId !== "all") {
       filters.push(eq(dazvolsTable.vehicleId, vehicleId));
+    }
+
+    if (assignment === "assigned") {
+      filters.push(isNotNull(dazvolsTable.vehicleId));
+    }
+
+    if (assignment === "unassigned") {
+      filters.push(isNull(dazvolsTable.vehicleId));
     }
 
     if (search) {
@@ -161,19 +179,24 @@ router.post("/dazvols", requireAuth, requireCompany, async (req: Request, res: R
     const parsed = createSchema.safeParse(req.body);
 
     if (!parsed.success) {
-      res.status(400).json({ error: "Dazvol ma’lumotlari noto‘g‘ri" });
+      res.status(400).json({
+        error: "Dazvol ma’lumotlari noto‘g‘ri",
+        details: parsed.error.flatten(),
+      });
       return;
     }
 
     const companyId = req.principal!.companyId!;
-    if (parsed.data.vehicleId) {
-  const vehicleOk = await assertVehicleBelongsToCompany(parsed.data.vehicleId, companyId);
 
-  if (!vehicleOk) {
-    res.status(400).json({ error: "Transport topilmadi yoki kompaniyaga tegishli emas" });
-    return;
-  }
-}
+    if (parsed.data.vehicleId) {
+      const vehicleOk = await assertVehicleBelongsToCompany(parsed.data.vehicleId, companyId);
+
+      if (!vehicleOk) {
+        res.status(400).json({ error: "Transport topilmadi yoki kompaniyaga tegishli emas" });
+        return;
+      }
+    }
+
     const now = new Date();
 
     const [created] = await db
@@ -202,10 +225,14 @@ router.post("/dazvols", requireAuth, requireCompany, async (req: Request, res: R
 
 router.patch("/dazvols/:id", requireAuth, requireCompany, async (req: Request, res: Response) => {
   try {
+    const id = String(req.params.id);
     const parsed = updateSchema.safeParse(req.body);
 
     if (!parsed.success) {
-      res.status(400).json({ error: "Dazvol ma’lumotlari noto‘g‘ri" });
+      res.status(400).json({
+        error: "Dazvol ma’lumotlari noto‘g‘ri",
+        details: parsed.error.flatten(),
+      });
       return;
     }
 
@@ -228,15 +255,19 @@ router.patch("/dazvols/:id", requireAuth, requireCompany, async (req: Request, r
     if (parsed.data.permitNumber !== undefined) updateData.permitNumber = parsed.data.permitNumber;
     if (parsed.data.country !== undefined) updateData.country = parsed.data.country;
     if (parsed.data.permitType !== undefined) updateData.permitType = parsed.data.permitType;
-    if (parsed.data.issueDate !== undefined) updateData.issueDate = parseDate(parsed.data.issueDate);
-    if (parsed.data.expiryDate !== undefined) updateData.expiryDate = parseDate(parsed.data.expiryDate);
+    if (parsed.data.issueDate !== undefined) {
+      updateData.issueDate = parseDate(parsed.data.issueDate);
+    }
+    if (parsed.data.expiryDate !== undefined) {
+      updateData.expiryDate = parseDate(parsed.data.expiryDate);
+    }
     if (parsed.data.status !== undefined) updateData.status = parsed.data.status;
     if (parsed.data.note !== undefined) updateData.note = parsed.data.note || null;
 
     const [updated] = await db
       .update(dazvolsTable)
       .set(updateData)
-      .where(and(eq(dazvolsTable.id, req.params.id), eq(dazvolsTable.companyId, companyId)))
+      .where(and(eq(dazvolsTable.id, id), eq(dazvolsTable.companyId, companyId)))
       .returning();
 
     if (!updated) {
@@ -251,25 +282,24 @@ router.patch("/dazvols/:id", requireAuth, requireCompany, async (req: Request, r
   }
 });
 
-const assignVehicleSchema = z.object({
-  vehicleId: z.string().uuid(),
-});
-
 router.post(
   "/dazvols/:id/assign-vehicle",
   requireAuth,
   requireCompany,
   async (req: Request, res: Response) => {
     try {
+      const id = String(req.params.id);
       const parsed = assignVehicleSchema.safeParse(req.body);
 
       if (!parsed.success) {
-        res.status(400).json({ error: "Transport noto‘g‘ri tanlangan" });
+        res.status(400).json({
+          error: "Transport noto‘g‘ri tanlangan",
+          details: parsed.error.flatten(),
+        });
         return;
       }
 
       const companyId = req.principal!.companyId!;
-
       const vehicleOk = await assertVehicleBelongsToCompany(parsed.data.vehicleId, companyId);
 
       if (!vehicleOk) {
@@ -283,7 +313,7 @@ router.post(
           vehicleId: parsed.data.vehicleId,
           updatedAt: new Date(),
         })
-        .where(and(eq(dazvolsTable.id, req.params.id), eq(dazvolsTable.companyId, companyId)))
+        .where(and(eq(dazvolsTable.id, id), eq(dazvolsTable.companyId, companyId)))
         .returning();
 
       if (!updated) {
@@ -301,11 +331,12 @@ router.post(
 
 router.delete("/dazvols/:id", requireAuth, requireCompany, async (req: Request, res: Response) => {
   try {
+    const id = String(req.params.id);
     const companyId = req.principal!.companyId!;
 
     const [deleted] = await db
       .delete(dazvolsTable)
-      .where(and(eq(dazvolsTable.id, req.params.id), eq(dazvolsTable.companyId, companyId)))
+      .where(and(eq(dazvolsTable.id, id), eq(dazvolsTable.companyId, companyId)))
       .returning({ id: dazvolsTable.id });
 
     if (!deleted) {

@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { z } from "zod";
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { tirCarnetsTable, vehiclesTable } from "@workspace/db/schema";
 import { requireAuth, requireCompany } from "../middlewares/auth";
@@ -90,13 +90,20 @@ router.get("/tir-carnets", requireAuth, requireCompany, async (req: Request, res
     const search = String(req.query.search ?? "").trim();
     const status = String(req.query.status ?? "").trim();
     const vehicleId = String(req.query.vehicleId ?? "").trim();
+    const assignment = String(req.query.assignment ?? "all").trim();
 
     const page = Math.max(Number(req.query.page ?? 1), 1);
     const pageSize = Math.min(Math.max(Number(req.query.pageSize ?? 20), 1), 100);
     const offset = (page - 1) * pageSize;
 
-    const filters = [eq(tirCarnetsTable.companyId, companyId)];
+    const filters: SQL[] = [eq(tirCarnetsTable.companyId, companyId)];
+if (assignment === "assigned") {
+  filters.push(isNotNull(tirCarnetsTable.vehicleId));
+}
 
+if (assignment === "unassigned") {
+  filters.push(isNull(tirCarnetsTable.vehicleId));
+}
     if (status && status !== "all") {
       filters.push(eq(tirCarnetsTable.status, status));
     }
