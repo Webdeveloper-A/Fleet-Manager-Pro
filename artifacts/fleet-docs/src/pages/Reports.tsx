@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth";
 import {
-  dateLabel,
+dateLabel,
 downloadCsv,
 getDocumentExpiry,
 isExpired,
@@ -113,7 +113,7 @@ export default function Reports() {
         Davlat: item.country,
         Turi: item.permitType,
         Transport: item.vehicleName || item.vehiclePlateNumber || "Biriktirilmagan",
-        "Amal muddati": dateLabel(item.expiryDate),
+        "Amal muddati": dateLabel(getDocumentExpiry(item)),
         Status: item.status,
       })),
     );

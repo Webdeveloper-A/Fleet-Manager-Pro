@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db } from "@workspace/db";
 import { vehiclesTable, documentsTable } from "@workspace/db/schema";
-import { and, eq, ilike, or, sql, desc, asc } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import {
   ListVehiclesQueryParams,
   ListVehiclesResponse,
@@ -160,7 +160,6 @@ router.get(
     );
   },
 );
-
 router.post(
   "/vehicles",
   requireAuth,

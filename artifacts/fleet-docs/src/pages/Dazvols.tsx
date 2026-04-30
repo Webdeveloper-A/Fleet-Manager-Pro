@@ -9,6 +9,7 @@ import {
   ScrollText,
   Search,
   Trash2,
+  Unlink,
 } from "lucide-react";
 import { useListVehicles, getListVehiclesQueryKey } from "@workspace/api-client-react";
 import { PageHeader } from "@/components/PageHeader";
@@ -64,6 +65,7 @@ import {
   deleteDazvol,
   listDazvols,
   updateDazvol,
+  type AssignmentFilter,
   type Dazvol,
   type DazvolPayload,
   type DazvolPermitType,
@@ -81,6 +83,12 @@ type FormState = {
   status: DazvolStatus;
   note: string;
 };
+
+const FILTERS: Array<{ value: AssignmentFilter; label: string }> = [
+  { value: "all", label: "Barchasi" },
+  { value: "assigned", label: "Biriktirilganlar" },
+  { value: "unassigned", label: "Biriktirilmaganlar" },
+];
 
 function useDebounced<T>(value: T, delay = 300): T {
   const [v, setV] = useState(value);
@@ -143,7 +151,6 @@ function buildPayload(form: FormState): DazvolPayload {
     expiryDate: form.expiryDate || null,
     status: form.status,
     note: form.note.trim() || null,
-    vehicleId: null,
   };
 }
 
@@ -155,6 +162,7 @@ export default function Dazvols() {
   const search = useDebounced(searchInput);
   const [status, setStatus] = useState("all");
   const [vehicleId, setVehicleId] = useState("all");
+  const [assignment, setAssignment] = useState<AssignmentFilter>("all");
   const [page, setPage] = useState(1);
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -168,22 +176,52 @@ export default function Dazvols() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, status, vehicleId]);
+  }, [search, status, vehicleId, assignment]);
 
   const params = useMemo(
     () => ({
       search: search || undefined,
       status: status === "all" ? undefined : status,
       vehicleId: vehicleId === "all" ? undefined : vehicleId,
+      assignment,
       page,
       pageSize: PAGE_SIZE,
     }),
-    [search, status, vehicleId, page],
+    [search, status, vehicleId, assignment, page],
   );
 
   const listQuery = useQuery({
     queryKey: ["dazvols", params],
     queryFn: () => listDazvols(token, params),
+    enabled: !!token,
+  });
+
+  const countBase = useMemo(
+    () => ({
+      search: search || undefined,
+      status: status === "all" ? undefined : status,
+      vehicleId: vehicleId === "all" ? undefined : vehicleId,
+      page: 1,
+      pageSize: 1,
+    }),
+    [search, status, vehicleId],
+  );
+
+  const allCount = useQuery({
+    queryKey: ["dazvols-count", "all", countBase],
+    queryFn: () => listDazvols(token, { ...countBase, assignment: "all" }),
+    enabled: !!token,
+  });
+
+  const assignedCount = useQuery({
+    queryKey: ["dazvols-count", "assigned", countBase],
+    queryFn: () => listDazvols(token, { ...countBase, assignment: "assigned" }),
+    enabled: !!token,
+  });
+
+  const unassignedCount = useQuery({
+    queryKey: ["dazvols-count", "unassigned", countBase],
+    queryFn: () => listDazvols(token, { ...countBase, assignment: "unassigned" }),
     enabled: !!token,
   });
 
@@ -198,6 +236,7 @@ export default function Dazvols() {
     mutationFn: (data: DazvolPayload) => createDazvol(token, data),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["dazvols"] });
+      await qc.invalidateQueries({ queryKey: ["dazvols-count"] });
       toast({ title: "Dazvol qo‘shildi" });
       closeDialog();
     },
@@ -212,6 +251,7 @@ export default function Dazvols() {
       updateDazvol(token, id, data),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["dazvols"] });
+      await qc.invalidateQueries({ queryKey: ["dazvols-count"] });
       toast({ title: "Dazvol yangilandi" });
       closeDialog();
     },
@@ -226,6 +266,7 @@ export default function Dazvols() {
       assignDazvolToVehicle(token, id, selectedVehicleId),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["dazvols"] });
+      await qc.invalidateQueries({ queryKey: ["dazvols-count"] });
       toast({ title: "Dazvol transportga biriktirildi" });
       setAssigning(null);
       setAssignVehicleId("");
@@ -236,10 +277,24 @@ export default function Dazvols() {
     },
   });
 
+  const unassignMutation = useMutation({
+    mutationFn: (id: string) => updateDazvol(token, id, { vehicleId: null }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["dazvols"] });
+      await qc.invalidateQueries({ queryKey: ["dazvols-count"] });
+      toast({ title: "Dazvol transportdan ajratildi" });
+    },
+    onError: (err) => {
+      const message = err instanceof Error ? err.message : "Transportdan ajratib bo‘lmadi";
+      toast({ title: "Xatolik", description: message, variant: "destructive" });
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteDazvol(token, id),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["dazvols"] });
+      await qc.invalidateQueries({ queryKey: ["dazvols-count"] });
       toast({ title: "Dazvol o‘chirildi" });
       setDeleting(null);
     },
@@ -299,11 +354,17 @@ export default function Dazvols() {
   const items = listQuery.data?.items ?? [];
   const total = listQuery.data?.total ?? 0;
 
+  const countMap: Record<AssignmentFilter, number> = {
+    all: allCount.data?.total ?? 0,
+    assigned: assignedCount.data?.total ?? 0,
+    unassigned: unassignedCount.data?.total ?? 0,
+  };
+
   return (
     <div className="space-y-5">
       <PageHeader
         title="Dazvollar"
-        description="Dazvol avval alohida qo‘shiladi, keyin kerakli transportga biriktiriladi."
+        description="Dazvollar avval alohida qo‘shiladi, keyin kerakli transport vositasiga biriktiriladi."
         actions={
           <Button onClick={openCreate}>
             <Plus className="mr-1 h-4 w-4" />
@@ -312,13 +373,30 @@ export default function Dazvols() {
         }
       />
 
+      <div className="flex flex-wrap gap-2">
+        {FILTERS.map((item) => (
+          <Button
+            key={item.value}
+            type="button"
+            variant={assignment === item.value ? "default" : "outline"}
+            onClick={() => setAssignment(item.value)}
+            className="rounded-full"
+          >
+            {item.label}
+            <span className="ml-2 rounded-full bg-background/20 px-2 py-0.5 text-xs">
+              {countMap[item.value]}
+            </span>
+          </Button>
+        ))}
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Dazvol raqami yoki davlat..."
+            placeholder="Dazvol raqami, davlat yoki transport bo‘yicha qidirish..."
             className="pl-9"
           />
         </div>
@@ -361,8 +439,14 @@ export default function Dazvols() {
       ) : items.length === 0 ? (
         <EmptyState
           icon={ScrollText}
-          title="Dazvol yozuvlari mavjud emas"
-          description="Avval Dazvol qo‘shing, keyin uni transportga biriktiring."
+          title={
+            assignment === "assigned"
+              ? "Transportga biriktirilgan Dazvollar mavjud emas"
+              : assignment === "unassigned"
+                ? "Biriktirilmagan Dazvollar mavjud emas"
+                : "Dazvol yozuvlari mavjud emas"
+          }
+          description="Dazvol qo‘shing yoki mavjud Dazvolni transportga biriktiring."
           action={
             <Button onClick={openCreate}>
               <Plus className="mr-1 h-4 w-4" />
@@ -380,7 +464,7 @@ export default function Dazvols() {
                     <TableHead>Dazvol</TableHead>
                     <TableHead>Davlat</TableHead>
                     <TableHead>Turi</TableHead>
-                    <TableHead>Biriktirilgan transport</TableHead>
+                    <TableHead>Transport</TableHead>
                     <TableHead>Amal muddati</TableHead>
                     <TableHead>Holat</TableHead>
                     <TableHead />
@@ -437,8 +521,17 @@ export default function Dazvols() {
                               }}
                             >
                               <LinkIcon className="mr-2 h-4 w-4" />
-                              Transportga biriktirish
+                              {item.vehicleId
+                                ? "Biriktirishni o‘zgartirish"
+                                : "Transportga biriktirish"}
                             </DropdownMenuItem>
+
+                            {item.vehicleId ? (
+                              <DropdownMenuItem onClick={() => unassignMutation.mutate(item.id)}>
+                                <Unlink className="mr-2 h-4 w-4" />
+                                Transportdan ajratish
+                              </DropdownMenuItem>
+                            ) : null}
 
                             <DropdownMenuItem onClick={() => openEdit(item)}>
                               <Pencil className="mr-2 h-4 w-4" />

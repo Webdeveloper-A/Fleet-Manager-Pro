@@ -12,12 +12,13 @@ import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth";
 import {
-  dateLabel,
+dateLabel,
 expiryClass,
 expiryText,
 getDocumentExpiry,
 isExpired,
 isExpiringSoon,
+loadOperationsData,
 loadOperationsData,
 } from "@/lib/operations-api";
 
@@ -76,7 +77,7 @@ export default function ControlCenter() {
         type: "TIR Carnet",
         title: item.carnetNumber,
         transport: item.vehicleName || item.vehiclePlateNumber || "Biriktirilmagan",
-        expiryDate: item.expiryDate,
+       expiryDate: getDocumentExpiry(item),
       })),
       ...dazvols.map((item) => ({
         type: "Dazvol",

@@ -68,6 +68,7 @@ import {
   Download,
   Upload,
   FileSpreadsheet,
+  Trash2,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
@@ -105,7 +106,7 @@ function downloadCsv(filename: string, rows: Array<Record<string, unknown>>) {
   if (rows.length === 0) {
     toast({
       title: "Eksport uchun ma’lumot yo‘q",
-      description: "Avval hujjat qo‘shing yoki filtrlarni tozalang.",
+      description: "Avval hujjat tanlang yoki filtrlarni tozalang.",
       variant: "destructive",
     });
     return;
@@ -232,6 +233,28 @@ function buildTemplateRows() {
   ];
 }
 
+async function deleteDocumentById(id: string, token: string | null) {
+  const res = await fetch(`/api/documents/${id}`, {
+    method: "DELETE",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!res.ok && res.status !== 204) {
+    let message = "Hujjatni o‘chirib bo‘lmadi";
+
+    try {
+      const body = (await res.json()) as { error?: string };
+      if (body.error) message = body.error;
+    } catch {
+      // ignore
+    }
+
+    throw new Error(message);
+  }
+}
+
 export default function Documents() {
   const [, setLocation] = useLocation();
   const qc = useQueryClient();
@@ -247,10 +270,14 @@ export default function Documents() {
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [importing, setImporting] = useState(false);
 
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
   const token = useAuth((s) => s.token);
 
   useEffect(() => {
     setPage(1);
+    setSelectedIds([]);
   }, [search, status, vehicleId]);
 
   const params = useMemo(
@@ -282,6 +309,83 @@ export default function Documents() {
   const vehicles = vehiclesQuery.data?.items ?? [];
   const documents = data?.items ?? [];
 
+  const pageIds = useMemo(() => documents.map((item) => item.id), [documents]);
+
+  const allPageSelected =
+    pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id));
+
+  function toggleOne(id: string) {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
+
+  function toggleAllOnPage() {
+    if (allPageSelected) {
+      setSelectedIds((prev) => prev.filter((id) => !pageIds.includes(id)));
+      return;
+    }
+
+    setSelectedIds((prev) => Array.from(new Set([...prev, ...pageIds])));
+  }
+
+  function handleExportSelected() {
+    const selected = documents.filter((item) => selectedIds.includes(item.id));
+
+    downloadCsv(
+      "tanlangan-hujjatlar.csv",
+      selected.map((d) => ({
+        Transport: d.vehicleName ?? "",
+        "Transport raqami": d.vehiclePlateNumber ?? "",
+        Hujjat: d.name,
+        Raqami: d.number,
+        "Boshlanish sanasi": new Date(d.startDate).toISOString().slice(0, 10),
+        "Tugash sanasi": new Date(d.endDate).toISOString().slice(0, 10),
+        Holat: d.status,
+        Izoh: d.note ?? "",
+      })),
+    );
+  }
+
+  async function invalidateDocuments() {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: getListDocumentsQueryKey() }),
+      qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
+    ]);
+  }
+
+  async function handleBulkDelete() {
+    if (selectedIds.length === 0) return;
+
+    const ok = window.confirm(
+      `${selectedIds.length} ta hujjatni o‘chirishni tasdiqlaysizmi? Bu amalni ortga qaytarib bo‘lmaydi.`,
+    );
+
+    if (!ok) return;
+
+    try {
+      setBulkDeleting(true);
+
+      for (const id of selectedIds) {
+        await deleteDocumentById(id, token);
+      }
+
+      const deletedCount = selectedIds.length;
+      setSelectedIds([]);
+      await invalidateDocuments();
+
+      toast({
+        title: "Tanlangan hujjatlar o‘chirildi",
+        description: `${deletedCount} ta hujjat o‘chirildi.`,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Hujjatlarni o‘chirib bo‘lmadi";
+      toast({ title: "Xatolik", description: message, variant: "destructive" });
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
   function openEdit(doc: Document) {
     setEditing(doc);
     setEditState({
@@ -294,13 +398,6 @@ export default function Documents() {
       fileUrl: doc.fileUrl ?? null,
       fileName: doc.fileName ?? null,
     });
-  }
-
-  async function invalidateDocuments() {
-    await Promise.all([
-      qc.invalidateQueries({ queryKey: getListDocumentsQueryKey() }),
-      qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
-    ]);
   }
 
   async function handleEditSave() {
@@ -604,6 +701,32 @@ export default function Documents() {
         </Select>
       </div>
 
+      {selectedIds.length > 0 ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4">
+          <p className="text-sm font-medium">{selectedIds.length} ta hujjat tanlandi</p>
+
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={handleExportSelected}>
+              <Download className="mr-1 h-4 w-4" />
+              Tanlanganlarni export qilish
+            </Button>
+
+            <Button variant="outline" onClick={() => setSelectedIds([])}>
+              Bekor qilish
+            </Button>
+
+            <Button variant="destructive" onClick={handleBulkDelete} disabled={bulkDeleting}>
+              {bulkDeleting ? (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-1 h-4 w-4" />
+              )}
+              Tanlanganlarni o‘chirish
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {isLoading ? (
         <Card>
           <CardContent className="space-y-2 p-4">
@@ -646,6 +769,13 @@ export default function Documents() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/40">
+                    <TableHead className="w-12">
+                      <input
+                        type="checkbox"
+                        checked={allPageSelected}
+                        onChange={toggleAllOnPage}
+                      />
+                    </TableHead>
                     <TableHead>Hujjat</TableHead>
                     <TableHead>Transport</TableHead>
                     <TableHead>Raqami</TableHead>
@@ -666,6 +796,14 @@ export default function Documents() {
                       className="border-b border-border/60 transition-colors hover:bg-muted/30"
                       data-testid={`row-document-${d.id}`}
                     >
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(d.id)}
+                          onChange={() => toggleOne(d.id)}
+                        />
+                      </TableCell>
+
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{d.name}</span>
@@ -756,22 +894,33 @@ export default function Documents() {
             {data.items.map((d) => (
               <Card key={d.id}>
                 <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">{d.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {d.vehicleName} • {d.vehiclePlateNumber}
-                      </p>
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(d.id)}
+                      onChange={() => toggleOne(d.id)}
+                      className="mt-1"
+                    />
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">{d.name}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {d.vehicleName} • {d.vehiclePlateNumber}
+                          </p>
+                        </div>
+
+                        <StatusPill status={d.status} />
+                      </div>
+
+                      <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{format(new Date(d.endDate), "MMM d, yyyy")}</span>
+                        <Button variant="ghost" size="sm" onClick={() => openEdit(d)}>
+                          Tahrirlash
+                        </Button>
+                      </div>
                     </div>
-
-                    <StatusPill status={d.status} />
-                  </div>
-
-                  <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{format(new Date(d.endDate), "MMM d, yyyy")}</span>
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(d)}>
-                      Tahrirlash
-                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -782,7 +931,10 @@ export default function Documents() {
             total={data.total}
             page={page}
             pageSize={PAGE_SIZE}
-            onPageChange={setPage}
+            onPageChange={(nextPage) => {
+              setPage(nextPage);
+              setSelectedIds([]);
+            }}
           />
         </>
       )}
